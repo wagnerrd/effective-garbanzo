@@ -6,8 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "gpiozero>=2.0.1",
-    "pirc522",
+    "pi-rc522",
     "pygame>=2.6.1",
+    "rpi-lgpio>=0.6",
     "spidev",
 ]
 

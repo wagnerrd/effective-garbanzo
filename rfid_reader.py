@@ -14,7 +14,11 @@ class Reader:
         
         try:
             # pin_rst is the BCM pin number
-            self.rfid = RFID(pin_rst=PIN_RFID_RST)
+            self.rfid = RFID(
+                pin_rst=PIN_RFID_RST,
+                pin_ce=8,
+                pin_irq=24,
+            )
             print("RFID Reader initialized.")
         except Exception as e:
             print(f"Error initializing RFID reader: {e}")

@@ -1,6 +1,7 @@
 # rfid_reader.py
 import spidev
 from pirc522 import RFID
+import RPi.GPIO as GPIO
 from config import PIN_RFID_RST
 
 class Reader:
@@ -15,6 +16,7 @@ class Reader:
         try:
             # pin_rst is the BCM pin number
             self.rfid = RFID(
+                pin_mode=GPIO.BCM,
                 pin_rst=PIN_RFID_RST,
                 pin_ce=8,
                 pin_irq=24,

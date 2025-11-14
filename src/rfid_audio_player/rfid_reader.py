@@ -185,6 +185,254 @@ class Reader:
             print(f"RFID: Failed to parse NDEF text record: {exc}")
             return None
 
+    def write_text(self, text: str, lang_code: str = "en") -> bool:
+        """
+        Writes a text string to an RFID tag as an NDEF text record.
+
+        Args:
+            text: The text to write to the tag
+            lang_code: The language code (default: "en")
+
+        Returns:
+            True if write was successful, False otherwise
+        """
+        if not self.rfid:
+            print("RFID: No RFID reader available")
+            return False
+
+        print(f"RFID: Attempting to write text: '{text}'")
+
+        # Wait for a tag to be present
+        print("RFID: Waiting for tag...")
+        (error, _) = self.rfid.request()
+        if error:
+            print("RFID: No tag detected")
+            return False
+
+        (error, uid) = self.rfid.anticoll()
+        if error:
+            print("RFID: Error during anticollision")
+            return False
+
+        uid_str = "".join(map(str, uid))
+        print(f"RFID: Tag detected with UID: {uid_str}")
+
+        # Note: We do NOT call select_tag() for NTAG/Ultralight cards
+        # Unlike MIFARE Classic, NTAG doesn't require selection/authentication
+        # Calling select_tag() actually makes the card unresponsive for read/write
+
+        # Create NDEF text record
+        ndef_message = self._create_text_record(text, lang_code)
+        if not ndef_message:
+            print("RFID: Failed to create NDEF message")
+            return False
+
+        print(f"RFID: Created NDEF message ({len(ndef_message)} bytes)")
+        print(f"RFID: NDEF hex: {ndef_message.hex()}")
+
+        # Wrap in TLV structure
+        tlv_data = self._create_tlv_wrapper(ndef_message)
+        print(f"RFID: TLV data ({len(tlv_data)} bytes): {tlv_data.hex()}")
+
+        # Write to tag
+        success = self._write_pages(uid, tlv_data, TAG_NDEF_START_PAGE)
+
+        self.rfid.stop_crypto()
+
+        if success:
+            print("RFID: Write successful!")
+        else:
+            print("RFID: Write failed")
+
+        return success
+
+    def _create_text_record(self, text: str, lang_code: str) -> Optional[bytes]:
+        """
+        Creates an NDEF text record (Well-Known Type 'T').
+
+        Format:
+        - Record header (1 byte)
+        - Type length (1 byte)
+        - Payload length (1 or 4 bytes)
+        - Record type (1 byte: 'T')
+        - Payload:
+          - Status byte (1 byte: encoding + language code length)
+          - Language code (variable)
+          - Text (variable)
+        """
+        try:
+            text_bytes = text.encode("utf-8")
+            lang_bytes = lang_code.encode("ascii")
+
+            # Status byte: bit 7 = encoding (0=UTF-8), bits 0-5 = lang code length
+            status = len(lang_bytes) & 0x3F
+
+            # Payload = status + lang code + text
+            payload = bytes([status]) + lang_bytes + text_bytes
+            payload_length = len(payload)
+
+            # Record header: MB=1, ME=1, SR=1, TNF=1 (Well-Known)
+            # MB (Message Begin) = 0x80
+            # ME (Message End) = 0x40
+            # SR (Short Record) = 0x10
+            # TNF (Type Name Format) = 0x01 (Well-Known)
+            header = 0x80 | 0x40 | 0x10 | 0x01  # 0xD1
+
+            # Type length (1 byte for 'T')
+            type_length = 1
+
+            # Build the record
+            record = bytes([header, type_length, payload_length])
+            record += b'T'  # Record type
+            record += payload
+
+            print(f"RFID: Text record created - Header: 0x{header:02X}, Type: T, Payload length: {payload_length}")
+
+            return record
+
+        except Exception as exc:
+            print(f"RFID: Error creating text record: {exc}")
+            return None
+
+    def _create_tlv_wrapper(self, ndef_message: bytes) -> bytes:
+        """
+        Wraps an NDEF message in TLV format for NFC Forum Type 2 tags.
+
+        Format:
+        - Type (0x03 = NDEF Message TLV)
+        - Length (1 or 3 bytes)
+        - Value (NDEF message)
+        - Terminator (0xFE)
+        """
+        message_length = len(ndef_message)
+
+        if message_length < 255:
+            # Short form: Type (1) + Length (1) + Value
+            tlv = bytes([0x03, message_length]) + ndef_message
+        else:
+            # Long form: Type (1) + 0xFF + Length (2) + Value
+            tlv = bytes([0x03, 0xFF]) + message_length.to_bytes(2, 'big') + ndef_message
+
+        # Add terminator TLV
+        tlv += bytes([0xFE])
+
+        # Pad to page boundary (4 bytes)
+        padding_needed = (4 - (len(tlv) % 4)) % 4
+        tlv += bytes([0x00] * padding_needed)
+
+        return tlv
+
+    def _write_ntag_page(self, page_num: int, data: List[int]) -> bool:
+        """
+        Writes 4 bytes to an NTAG page using MIFARE Ultralight WRITE command (0xA2).
+
+        NTAG uses SINGLE-PHASE protocol (unlike MIFARE Classic's two-phase):
+        Send CMD (0xA2) + Page Address + 4 Data Bytes in ONE transaction
+
+        Args:
+            page_num: Page number to write to
+            data: List of 4 bytes to write
+
+        Returns:
+            True if write succeeded, False otherwise
+        """
+        if not self.rfid or len(data) != 4:
+            return False
+
+        # First, verify the card is still responsive by doing a read
+        print(f"RFID: Verifying card is responsive by reading page {page_num}...")
+        (read_error, read_data) = self.rfid.read(page_num)
+        if read_error:
+            print(f"RFID: Card not responsive, cannot write")
+            return False
+        print(f"RFID: Card responsive, current data: {read_data[:4]}")
+
+        # MIFARE Ultralight/NTAG WRITE command (compatibility write)
+        NTAG_WRITE_CMD = 0xA2
+
+        print(f"RFID: Writing page {page_num}: {[hex(b) for b in data]}")
+
+        # Build complete buffer: CMD + Page + 4 Data Bytes (all in one transaction)
+        buf = [NTAG_WRITE_CMD, page_num]
+        buf.extend(data)
+
+        # Calculate and append CRC
+        crc = self.rfid.calculate_crc(buf)
+        buf.append(crc[0])
+        buf.append(crc[1])
+
+        print(f"RFID: Sending single-phase write: {[hex(b) for b in buf]}")
+
+        # Send the complete write command in one transaction
+        (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf)
+
+        print(f"RFID: Response - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+
+        # For NTAG write, we might get a different response than MIFARE Classic
+        # The ACK might be encoded differently or the response length might vary
+        if back_length == 0:
+            print(f"RFID: No response from card - write may have succeeded, verifying...")
+            # Verify by reading back
+            time.sleep(0.05)
+            (verify_error, verify_data) = self.rfid.read(page_num)
+            if not verify_error and verify_data[:4] == data:
+                print(f"RFID: Verification successful! Data matches.")
+                return True
+            else:
+                print(f"RFID: Verification failed. Expected {data}, got {verify_data[:4] if not verify_error else 'read error'}")
+                return False
+
+        # Check for ACK response (should be 4 bits with value 0x0A)
+        if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:
+            print(f"RFID: Write failed - Expected ACK (0x0A), got {hex(back_data[0] & 0x0F) if not error and back_data else 'error'}")
+            return False
+
+        print(f"RFID: Page {page_num} write ACKed successfully!")
+        return True
+
+    def _write_pages(self, uid: List[int], data: bytes, start_page: int) -> bool:
+        """
+        Writes data to NTAG tag pages (4 bytes per page).
+
+        Args:
+            uid: Tag UID bytes
+            data: Data to write
+            start_page: Starting page number
+
+        Returns:
+            True if all writes succeeded, False otherwise
+        """
+        if not self.rfid:
+            return False
+
+        # Calculate number of pages needed (4 bytes per page)
+        page_count = (len(data) + 3) // 4
+        print(f"RFID: Writing {len(data)} bytes across {page_count} pages starting at page {start_page}")
+
+        for i in range(page_count):
+            page_num = start_page + i
+            offset = i * 4
+            page_data = data[offset:offset + 4]
+
+            # Pad to 4 bytes if needed
+            if len(page_data) < 4:
+                page_data = page_data + bytes([0x00] * (4 - len(page_data)))
+
+            print(f"RFID: Writing page {page_num}: {page_data.hex()} (bytes: {list(page_data)})")
+
+            # Use NTAG-specific write method (0xA2 command for 4-byte pages)
+            success = self._write_ntag_page(page_num, list(page_data))
+            if not success:
+                print(f"RFID: Error writing page {page_num}")
+                return False
+
+            print(f"RFID: Page {page_num} written successfully")
+
+            # Small delay between page writes
+            time.sleep(0.05)
+
+        return True
+
     def cleanup(self):
         if self.rfid:
             self.rfid.cleanup()

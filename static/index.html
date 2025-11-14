@@ -346,6 +346,7 @@
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('folders')">Media Folders</button>
                 <button class="tab" onclick="switchTab('files')">Files</button>
+                <button class="tab" onclick="switchTab('nfc')">Write NFC</button>
             </div>
 
             <div id="foldersTab" class="tab-content active">
@@ -366,6 +367,33 @@
                     <p style="font-size: 0.85em; color: #999;">Supports MP3, OGG, WAV</p>
                 </div>
                 <ul class="file-list" id="fileList"></ul>
+            </div>
+
+            <div id="nfcTab" class="tab-content">
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px;">Write Text to NFC Tag</h3>
+                    <p style="color: #666; font-size: 0.9em; margin-bottom: 20px;">
+                        Write a folder name to an NFC tag. When scanned, the tag will play the corresponding playlist.
+                    </p>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Select Folder:</label>
+                        <select id="nfcFolderSelect" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
+                            <option value="">Select a folder...</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Or Enter Custom Text:</label>
+                        <input type="text" id="nfcCustomText" placeholder="Enter text to write..." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
+                    </div>
+
+                    <button class="btn-small" onclick="writeNFC()" id="writeNFCBtn" style="width: 100%; padding: 15px; font-size: 1.1em;">
+                        📝 Write to NFC Tag
+                    </button>
+
+                    <div id="nfcStatus" style="margin-top: 20px; padding: 15px; border-radius: 8px; display: none;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -483,8 +511,11 @@
             if (tab === 'folders') {
                 document.getElementById('foldersTab').classList.add('active');
                 loadFolders();
-            } else {
+            } else if (tab === 'files') {
                 document.getElementById('filesTab').classList.add('active');
+            } else if (tab === 'nfc') {
+                document.getElementById('nfcTab').classList.add('active');
+                loadNFCFolders();
             }
         }
 
@@ -655,6 +686,85 @@
             } catch (error) {
                 console.error('Error deleting file:', error);
                 alert('Error deleting file');
+            }
+        }
+
+        async function loadNFCFolders() {
+            try {
+                const response = await fetch('/api/media/folders');
+                const data = await response.json();
+                const select = document.getElementById('nfcFolderSelect');
+
+                // Clear existing options except the first one
+                select.innerHTML = '<option value="">Select a folder...</option>';
+
+                // Add folder options
+                data.folders.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = folder.name;
+                    option.textContent = folder.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading folders for NFC:', error);
+            }
+        }
+
+        async function writeNFC() {
+            const folderSelect = document.getElementById('nfcFolderSelect');
+            const customText = document.getElementById('nfcCustomText');
+            const statusDiv = document.getElementById('nfcStatus');
+            const writeBtn = document.getElementById('writeNFCBtn');
+
+            // Get text from either folder select or custom input
+            let text = customText.value.trim();
+            if (!text && folderSelect.value) {
+                text = folderSelect.value;
+            }
+
+            if (!text) {
+                alert('Please select a folder or enter custom text');
+                return;
+            }
+
+            // Show loading status
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.textContent = '⏳ Writing to NFC tag... Please place a tag near the reader.';
+            writeBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/nfc/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, lang_code: 'en' })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show success message
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.textContent = `✅ ${data.message}`;
+
+                    // Clear inputs
+                    customText.value = '';
+                    folderSelect.value = '';
+                } else {
+                    // Show error message
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.textContent = `❌ ${data.error}`;
+                }
+            } catch (error) {
+                console.error('Error writing to NFC:', error);
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+            } finally {
+                writeBtn.disabled = false;
             }
         }
     </script>

@@ -6,9 +6,10 @@ import pygame
 from .config import MEDIA_PATH, SUPPORTED_EXTENSIONS
 
 class WebServer:
-    def __init__(self, audio_player):
-        """Initialize the Flask web server with a reference to the AudioPlayer."""
+    def __init__(self, audio_player, rfid_reader=None):
+        """Initialize the Flask web server with a reference to the AudioPlayer and optional RFID Reader."""
         self.audio_player = audio_player
+        self.rfid_reader = rfid_reader
         self.app = Flask(__name__, static_folder='static', static_url_path='')
         self._setup_routes()
 
@@ -178,6 +179,29 @@ class WebServer:
                 return jsonify({'success': True, 'message': f'Deleted folder {folder_name}'})
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+
+        # Write text to NFC tag
+        @self.app.route('/api/nfc/write', methods=['POST'])
+        def write_nfc():
+            if self.rfid_reader is None:
+                return jsonify({'error': 'RFID reader not available'}), 503
+
+            data = request.get_json()
+            text = data.get('text', '').strip()
+            lang_code = data.get('lang_code', 'en')
+
+            if not text:
+                return jsonify({'error': 'Text is required'}), 400
+
+            try:
+                # Attempt to write to the tag
+                success = self.rfid_reader.write_text(text, lang_code)
+                if success:
+                    return jsonify({'success': True, 'message': f'Successfully wrote "{text}" to NFC tag'})
+                else:
+                    return jsonify({'error': 'Failed to write to NFC tag. Make sure a tag is present.'}), 500
+            except Exception as e:
+                return jsonify({'error': f'Error writing to NFC tag: {str(e)}'}), 500
 
     def run(self, host='0.0.0.0', port=5000):
         """Run the Flask server in a separate thread."""

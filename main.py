@@ -25,7 +25,7 @@ if __name__ == "__main__":
         buttons = ButtonControls(player)
 
         # 3. Initialize and start the web server
-        web_server = WebServer(player)
+        web_server = WebServer(player, reader)
         web_server.run(host='0.0.0.0', port=5000)
 
         print("\n" + "="*50)

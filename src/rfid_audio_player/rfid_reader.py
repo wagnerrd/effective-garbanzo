@@ -310,7 +310,7 @@ class Reader:
             while len(page_data) < 4:
                 page_data.append(0x00)
 
-            error, _ = self.rfid.write(page_num, page_data)
+            error = self.rfid.write(page_num, page_data)
             if error:
                 print(f"RFID: Error writing to page {page_num}")
                 return False

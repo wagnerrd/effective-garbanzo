@@ -1,7 +1,7 @@
 [project]
-name = "effective-garbanzo"
+name = "rfid-audio-player"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Raspberry Pi-based RFID-triggered audio player with web interface"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,6 +13,13 @@ dependencies = [
     "rpi-lgpio>=0.6",
     "spidev",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.uv.sources]
 pirc522 = { git = "https://github.com/hoffie/pi-rc522-gpiozero" }

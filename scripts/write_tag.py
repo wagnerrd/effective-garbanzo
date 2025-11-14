@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 from pirc522 import RFID
 
-from config import (
+from src.rfid_audio_player.config import (
     PIN_RFID_RST,
     TAG_NDEF_START_PAGE,
     TAG_NDEF_PAGE_COUNT,

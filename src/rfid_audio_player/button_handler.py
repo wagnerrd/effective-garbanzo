@@ -1,7 +1,7 @@
 # button_handler.py
 from gpiozero import Button
 from datetime import datetime
-from config import (
+from .config import (
     PIN_PLAY_PAUSE,
     PIN_VOL_UP,
     PIN_VOL_DOWN,

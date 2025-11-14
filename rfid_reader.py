@@ -185,7 +185,8 @@ class Reader:
             self.rfid.select_tag(uid_bytes)
             if self.util:
                 self.util.set_tag(uid_bytes)
-                self.util.load_key(TAG_AUTH_KEY)
+                key = tuple(int(b) & 0xFF for b in TAG_AUTH_KEY[:6])
+                self.util.auth(self.rfid.auth_a, key)
 
             for block in blocks:
                 # Skip sector trailer blocks (every 4th block on MIFARE Classic 1K)
@@ -193,7 +194,7 @@ class Reader:
                     continue
 
                 if self.util:
-                    auth_error = self.util.auth(self.rfid.auth_a, block)
+                    auth_error = self.util.do_auth(block)
                     if auth_error:
                         print(f"RFID: Authentication failed for block {block}.")
                         return None

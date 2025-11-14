@@ -1,5 +1,6 @@
 # audio_player.py
 import pygame
+import vlc
 import os
 from config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
@@ -8,7 +9,7 @@ from config import (
 
 class AudioPlayer:
     def __init__(self):
-        """Initializes the pygame mixer."""
+        """Initializes the pygame mixer and VLC player."""
         try:
             pygame.mixer.init()
             pygame.mixer.music.set_volume(DEFAULT_VOLUME)
@@ -17,11 +18,17 @@ class AudioPlayer:
             print(f"Error initializing pygame mixer: {e}")
             print("Do you have a valid audio output device connected (e.g., USB audio)?")
 
+        # Initialize VLC for .m4a files
+        self.vlc_instance = vlc.Instance()
+        self.vlc_player = self.vlc_instance.media_player_new()
+        self.vlc_player.audio_set_volume(int(DEFAULT_VOLUME * 100))
+
         # State variables
         self.current_playlist = []  # List of full file paths
         self.current_track_index = -1
         self.paused = False
         self.playing = False
+        self.using_vlc = False  # Track which player is active
 
     def load_playlist(self, rfid_uid):
         """
@@ -60,17 +67,40 @@ class AudioPlayer:
             print("No playlist loaded.")
             return
 
-        try:
-            track_path = self.current_playlist[self.current_track_index]
-            pygame.mixer.music.load(track_path)
-            pygame.mixer.music.play()
-            self.playing = True
-            self.paused = False
-            track_num = self.current_track_index + 1
-            total_tracks = len(self.current_playlist)
-            print(f"♪ Now Playing [{track_num}/{total_tracks}]: {os.path.basename(track_path)}")
-        except pygame.error as e:
-            print(f"❌ Error playing track {track_path}: {e}")
+        track_path = self.current_playlist[self.current_track_index]
+        track_num = self.current_track_index + 1
+        total_tracks = len(self.current_playlist)
+
+        # Use VLC for .m4a files, pygame for others
+        if track_path.endswith('.m4a'):
+            try:
+                # Stop pygame if it was playing
+                pygame.mixer.music.stop()
+
+                # Use VLC for .m4a
+                media = self.vlc_instance.media_new(track_path)
+                self.vlc_player.set_media(media)
+                self.vlc_player.play()
+                self.using_vlc = True
+                self.playing = True
+                self.paused = False
+                print(f"♪ Now Playing (VLC) [{track_num}/{total_tracks}]: {os.path.basename(track_path)}")
+            except Exception as e:
+                print(f"❌ Error playing track {track_path}: {e}")
+        else:
+            try:
+                # Stop VLC if it was playing
+                self.vlc_player.stop()
+
+                # Use pygame for mp3, ogg, wav
+                pygame.mixer.music.load(track_path)
+                pygame.mixer.music.play()
+                self.using_vlc = False
+                self.playing = True
+                self.paused = False
+                print(f"♪ Now Playing [{track_num}/{total_tracks}]: {os.path.basename(track_path)}")
+            except pygame.error as e:
+                print(f"❌ Error playing track {track_path}: {e}")
 
     def toggle_pause(self):
         """Toggles play/pause state."""
@@ -79,11 +109,17 @@ class AudioPlayer:
             return
 
         if self.paused:
-            pygame.mixer.music.unpause()
+            if self.using_vlc:
+                self.vlc_player.play()
+            else:
+                pygame.mixer.music.unpause()
             self.paused = False
             print("▶ Resumed playback.")
         else:
-            pygame.mixer.music.pause()
+            if self.using_vlc:
+                self.vlc_player.pause()
+            else:
+                pygame.mixer.music.pause()
             self.paused = True
             print("⏸ Paused.")
 
@@ -111,17 +147,27 @@ class AudioPlayer:
 
     def volume_up(self):
         """Increases volume by 10%."""
-        current_vol = pygame.mixer.music.get_volume()
-        new_vol = min(current_vol + 0.1, 1.0) # Cap at 1.0
-        pygame.mixer.music.set_volume(new_vol)
+        if self.using_vlc:
+            current_vol = self.vlc_player.audio_get_volume() / 100.0
+            new_vol = min(current_vol + 0.1, 1.0)
+            self.vlc_player.audio_set_volume(int(new_vol * 100))
+        else:
+            current_vol = pygame.mixer.music.get_volume()
+            new_vol = min(current_vol + 0.1, 1.0)
+            pygame.mixer.music.set_volume(new_vol)
         vol_bar = "█" * int(new_vol * 10) + "░" * (10 - int(new_vol * 10))
         print(f"🔊 Volume: [{vol_bar}] {int(new_vol * 100)}%")
 
     def volume_down(self):
         """Decreases volume by 10%."""
-        current_vol = pygame.mixer.music.get_volume()
-        new_vol = max(current_vol - 0.1, 0.0) # Floor at 0.0
-        pygame.mixer.music.set_volume(new_vol)
+        if self.using_vlc:
+            current_vol = self.vlc_player.audio_get_volume() / 100.0
+            new_vol = max(current_vol - 0.1, 0.0)
+            self.vlc_player.audio_set_volume(int(new_vol * 100))
+        else:
+            current_vol = pygame.mixer.music.get_volume()
+            new_vol = max(current_vol - 0.1, 0.0)
+            pygame.mixer.music.set_volume(new_vol)
         vol_bar = "█" * int(new_vol * 10) + "░" * (10 - int(new_vol * 10))
         print(f"🔉 Volume: [{vol_bar}] {int(new_vol * 100)}%")
 
@@ -131,8 +177,13 @@ class AudioPlayer:
         finished and automatically plays the next one.
         """
         if self.playing and not self.paused:
-            # get_busy() returns True if music is playing
-            if not pygame.mixer.music.get_busy():
+            # Check if music is still playing based on which player is active
+            if self.using_vlc:
+                is_playing = self.vlc_player.is_playing()
+            else:
+                is_playing = pygame.mixer.music.get_busy()
+
+            if not is_playing:
                 # Check if we're at the last track
                 is_last_track = (self.current_track_index == len(self.current_playlist) - 1)
 
@@ -146,11 +197,15 @@ class AudioPlayer:
     def stop(self):
         """Stops playback and clears the playlist."""
         pygame.mixer.music.stop()
+        self.vlc_player.stop()
         self.current_playlist = []
         self.current_track_index = -1
         self.playing = False
         self.paused = False
+        self.using_vlc = False
 
     def quit(self):
         """Shuts down the mixer."""
         pygame.mixer.quit()
+        self.vlc_player.release()
+        self.vlc_instance.release()

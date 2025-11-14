@@ -13,9 +13,9 @@ class WebServer:
 
         # Get absolute path to static folder (at project root)
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        static_folder = os.path.join(project_root, 'static')
+        self.static_folder = os.path.join(project_root, 'static')
 
-        self.app = Flask(__name__, static_folder=static_folder, static_url_path='')
+        self.app = Flask(__name__, static_folder=self.static_folder, static_url_path='')
         self._setup_routes()
 
     def _setup_routes(self):
@@ -24,7 +24,7 @@ class WebServer:
         # Serve the main page
         @self.app.route('/')
         def index():
-            return send_from_directory('static', 'index.html')
+            return send_from_directory(self.static_folder, 'index.html')
 
         # Get current player status
         @self.app.route('/api/status', methods=['GET'])

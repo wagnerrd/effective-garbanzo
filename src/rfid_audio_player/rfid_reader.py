@@ -343,6 +343,14 @@ class Reader:
         if not self.rfid or len(data) != 4:
             return False
 
+        # First, verify the card is still responsive by doing a read
+        print(f"RFID: Verifying card is responsive by reading page {page_num}...")
+        (read_error, read_data) = self.rfid.read(page_num)
+        if read_error:
+            print(f"RFID: Card not responsive, cannot write")
+            return False
+        print(f"RFID: Card responsive, current data: {read_data[:4]}")
+
         # MIFARE Ultralight/NTAG WRITE command (compatibility write)
         NTAG_WRITE_CMD = 0xA2
 
@@ -363,6 +371,20 @@ class Reader:
         (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf)
 
         print(f"RFID: Response - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+
+        # For NTAG write, we might get a different response than MIFARE Classic
+        # The ACK might be encoded differently or the response length might vary
+        if back_length == 0:
+            print(f"RFID: No response from card - write may have succeeded, verifying...")
+            # Verify by reading back
+            time.sleep(0.05)
+            (verify_error, verify_data) = self.rfid.read(page_num)
+            if not verify_error and verify_data[:4] == data:
+                print(f"RFID: Verification successful! Data matches.")
+                return True
+            else:
+                print(f"RFID: Verification failed. Expected {data}, got {verify_data[:4] if not verify_error else 'read error'}")
+                return False
 
         # Check for ACK response (should be 4 bits with value 0x0A)
         if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:

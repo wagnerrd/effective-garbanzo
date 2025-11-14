@@ -3,6 +3,7 @@ import time
 from audio_player import AudioPlayer
 from rfid_reader import Reader
 from button_handler import ButtonControls
+from web_server import WebServer
 
 if __name__ == "__main__":
     """
@@ -14,6 +15,7 @@ if __name__ == "__main__":
     player = None
     reader = None
     buttons = None
+    web_server = None
 
     try:
         # 1. Initialize the core components
@@ -25,6 +27,10 @@ if __name__ == "__main__":
         #    This automatically links all button events.
         buttons = ButtonControls(player)
 
+        # 3. Initialize and start the web server
+        web_server = WebServer(player)
+        web_server.run(host='0.0.0.0', port=5000)
+
         print("\n" + "="*50)
         print("  🎵 PhonieBox Minimal is RUNNING 🎵")
         print("="*50)
@@ -33,7 +39,7 @@ if __name__ == "__main__":
         print("🛑 Press Ctrl+C to exit")
         print("="*50 + "\n")
 
-        # 3. Start the main application loop
+        # 4. Start the main application loop
         while True:
             # Check for a new RFID tag.
             # The reader.read_tag() method is smart and will
@@ -50,13 +56,13 @@ if __name__ == "__main__":
 
             # Poll every 100ms. This is idle time, preventing
             # the loop from using 100% CPU.
-            time.sleep(0.1)
+            time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n\n🛑 Shutting down... (Ctrl+C pressed)")
 
     finally:
-        # 4. Clean up resources
+        # 5. Clean up resources
         print("\n🧹 Cleaning up resources...")
         if player:
             player.quit()

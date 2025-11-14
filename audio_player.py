@@ -1,5 +1,6 @@
 # audio_player.py
 import pygame
+from random import shuffle
 import os
 from config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
@@ -42,9 +43,10 @@ class AudioPlayer:
         # Scan the directory for supported audio files and sort them
         self.current_playlist = [
             os.path.join(folder_path, f)
-            for f in sorted(os.listdir(folder_path))
+            for f in (os.listdir(folder_path))
             if any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS)
         ]
+        shuffle(self.current_playlist)
 
         if not self.current_playlist:
             print(f"No audio files found in {folder_path}")

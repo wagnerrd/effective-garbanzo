@@ -5,12 +5,11 @@ from pirc522 import RFID
 
 from config import (
     PIN_RFID_RST,
-    TAG_NDEF_START_BLOCK,
-    TAG_NDEF_BLOCK_COUNT,
-    TAG_AUTH_KEY,
+    TAG_NDEF_START_PAGE,
+    TAG_NDEF_PAGE_COUNT,
 )
 
-BLOCK_SIZE = 16
+PAGE_SIZE = 4  # NTAG pages contain 4 bytes
 
 
 def build_text_ndef_tlv(text: str, language: str = "en") -> bytes:
@@ -31,50 +30,45 @@ def build_text_ndef_tlv(text: str, language: str = "en") -> bytes:
     return bytes([0x03, len(ndef_record)]) + ndef_record + bytes([0xFE])
 
 
-def generate_block_sequence() -> List[int]:
-    """Returns the absolute block numbers we will touch (trailers included)."""
-    return list(range(
-        TAG_NDEF_START_BLOCK,
-        TAG_NDEF_START_BLOCK + TAG_NDEF_BLOCK_COUNT
-    ))
-
-
-def build_block_payloads(text: str) -> List[Tuple[int, bytes]]:
+def build_page_payloads(text: str) -> List[Tuple[int, bytes]]:
     """
-    Returns a list of (block_number, data_bytes) tuples, skipping sector trailers.
+    Generates (page_number, 4-byte data) tuples spanning the configured NDEF range.
     """
     tlv = build_text_ndef_tlv(text)
-    blocks = generate_block_sequence()
-    data_blocks = [b for b in blocks if (b + 1) % 4 != 0]
-
-    buffer = bytearray(len(data_blocks) * BLOCK_SIZE)
+    total_bytes = TAG_NDEF_PAGE_COUNT * PAGE_SIZE
+    buffer = bytearray(total_bytes)
     buffer[:len(tlv)] = tlv
 
     payloads = []
     offset = 0
-    for block in blocks:
-        if (block + 1) % 4 == 0:
-            # Skip sector trailer blocks.
-            continue
-
-        chunk = buffer[offset:offset + BLOCK_SIZE]
-        if len(chunk) < BLOCK_SIZE:
-            chunk = chunk + bytes(BLOCK_SIZE - len(chunk))
-
-        payloads.append((block, bytes(chunk)))
-        offset += BLOCK_SIZE
+    for page in range(TAG_NDEF_START_PAGE, TAG_NDEF_START_PAGE + TAG_NDEF_PAGE_COUNT):
+        chunk = buffer[offset:offset + PAGE_SIZE]
+        if len(chunk) < PAGE_SIZE:
+            chunk = chunk + bytes(PAGE_SIZE - len(chunk))
+        payloads.append((page, bytes(chunk)))
+        offset += PAGE_SIZE
 
     return payloads
+
+
+def _write_page(rfid: RFID, page: int, data: bytes) -> bool:
+    """
+    Issues the NTAG WRITE (0xA2) command for a single 4-byte page.
+    Returns True on success.
+    """
+    frame = [0xA2, page] + list(data[:PAGE_SIZE])
+    crc = rfid.calculate_crc(frame)
+    frame.extend(crc)
+    error, back_data, back_length = rfid.card_write(rfid.mode_transrec, frame)
+    if error:
+        return False
+    return back_length == 4 and (back_data[0] & 0x0F) == 0x0A
 
 
 def write_text_to_tag(text: str):
     """Waits for a tag and programs it with the provided text."""
     rfid = RFID(pin_rst=PIN_RFID_RST, bus=0, device=0)
-    util = rfid.util()
-    util.debug = False
-
-    key = tuple(int(b) & 0xFF for b in TAG_AUTH_KEY[:6])
-    block_payloads = build_block_payloads(text)
+    page_payloads = build_page_payloads(text)
 
     print("=" * 60)
     print("RFID Text Writer")
@@ -95,24 +89,13 @@ def write_text_to_tag(text: str):
                 continue
 
             print(f"Tag detected UID: {''.join(map(str, uid))}")
-            util.set_tag(uid)
-            util.auth(rfid.auth_a, key)
-
             success = True
-            for block, data in block_payloads:
-                auth_error = util.do_auth(block, force=True)
-                if auth_error:
-                    print(f"Authentication failed for block {block}.")
+
+            for page, data in page_payloads:
+                if not _write_page(rfid, page, data):
+                    print(f"Write failed for page {page}.")
                     success = False
                     break
-
-                write_error = rfid.write(block, list(data))
-                if write_error:
-                    print(f"Write failed for block {block}.")
-                    success = False
-                    break
-
-            rfid.stop_crypto()
 
             if success:
                 print("✓ Tag programmed with text: 'Awesome'")
@@ -123,7 +106,6 @@ def write_text_to_tag(text: str):
     except KeyboardInterrupt:
         print("\nOperation cancelled.")
     finally:
-        util.deauth()
         rfid.cleanup()
 
 

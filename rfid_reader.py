@@ -1,14 +1,13 @@
 # rfid_reader.py
 import time
-from typing import Iterable, List, Optional
+from typing import List, Optional
 
 from pirc522 import RFID
 
 from config import (
     PIN_RFID_RST,
-    TAG_NDEF_START_BLOCK,
-    TAG_NDEF_BLOCK_COUNT,
-    TAG_AUTH_KEY,
+    TAG_NDEF_START_PAGE,
+    TAG_NDEF_PAGE_COUNT,
 )
 
 
@@ -72,15 +71,14 @@ class Reader:
         Reads NDEF TLV bytes from the configured block range and attempts
         to extract the first Well-Known Text record.
         """
-        if not self.rfid or not uid_bytes or TAG_NDEF_BLOCK_COUNT <= 0:
+        if not self.rfid or not uid_bytes or TAG_NDEF_PAGE_COUNT <= 0:
             return None
 
-        blocks = list(range(
-            TAG_NDEF_START_BLOCK,
-            TAG_NDEF_START_BLOCK + TAG_NDEF_BLOCK_COUNT
-        ))
-
-        raw_bytes = self._read_blocks(uid_bytes, blocks)
+        raw_bytes = self._read_pages(
+            uid_bytes,
+            TAG_NDEF_START_PAGE,
+            TAG_NDEF_PAGE_COUNT
+        )
         if not raw_bytes:
             return None
 
@@ -112,41 +110,28 @@ class Reader:
 
         return None
 
-    def _read_blocks(self, uid_bytes: List[int], block_numbers: Iterable[int]) -> Optional[bytes]:
+    def _read_pages(self, uid_bytes: List[int], start_page: int, page_count: int) -> Optional[bytes]:
         """
-        Reads raw 16-byte blocks (skipping sector trailers) and returns
-        their concatenated bytes.
+        Reads raw bytes from NTAG-style tags (4 bytes per page, read in
+        16-byte chunks). No authentication required for default tags.
         """
+        if page_count <= 0:
+            return None
+
         payload = bytearray()
-        key = [int(b) & 0xFF for b in TAG_AUTH_KEY[:6]]
-        last_sector = None
+        current_page = start_page
+        final_page = start_page + page_count
 
-        for block in block_numbers:
-            if (block + 1) % 4 == 0:
-                # Skip sector trailer blocks that contain the keys.
-                continue
-
-            sector = block - (block % 4)
-            if sector != last_sector:
-                error = self.rfid.card_auth(self.rfid.auth_a, sector, key, uid_bytes)
-                if error:
-                    print(f"RFID: Authentication failed for sector starting at block {sector}.")
-                    return None
-                last_sector = sector
-
-            error, data = self.rfid.read(block)
+        while current_page < final_page:
+            error, data = self.rfid.read(current_page)
             if error:
-                print(f"RFID: Error reading block {block}.")
+                print(f"RFID: Error reading starting at page {current_page}.")
                 return None
 
             payload.extend(data)
+            current_page += 4  # read command returns 4 pages (16 bytes)
 
-        try:
-            self.rfid.stop_crypto()
-        except Exception:
-            pass
-
-        return bytes(payload)
+        return bytes(payload[:page_count * 4])
 
     def _parse_text_record(self, message: bytes) -> Optional[str]:
         """

@@ -2,3 +2,4 @@ media/
 .DS_Store
 __pycache__
 tmp*
+*.whl

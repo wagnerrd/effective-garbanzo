@@ -29,11 +29,6 @@ DEFAULT_VOLUME = 0.5
 
 # --- RFID Tag Writing Settings ---
 
-# Starting block for NDEF data (block 4 is first user data block after manufacturer sector)
-TAG_NDEF_START_BLOCK = 4
-
-# Number of blocks to write (covers multiple sectors for larger payloads)
-TAG_NDEF_BLOCK_COUNT = 16
-
-# Default MIFARE authentication key (factory default is all 0xFF)
-TAG_AUTH_KEY = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+# NTAG215 pages that hold the NFC Forum TLV (page 4 is the first writable page).
+TAG_NDEF_START_PAGE = 4
+TAG_NDEF_PAGE_COUNT = 32  # 32 pages = 128 bytes of NDEF payload space

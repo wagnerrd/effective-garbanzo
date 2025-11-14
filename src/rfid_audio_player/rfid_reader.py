@@ -310,12 +310,17 @@ class Reader:
             while len(page_data) < 4:
                 page_data.append(0x00)
 
-            print(f"RFID: Writing to page {page_num}: {page_data}")
-            error = self.rfid.write(page_num, page_data)
-            print(f"RFID: Write result - error={error}, type={type(error)}")
+            # For NTAG tags, use util_write instead of write
+            # util_write is for Mifare Ultralight/NTAG tags
+            if hasattr(self.rfid, 'util_write'):
+                error = self.rfid.util_write(page_num, page_data)
+            else:
+                error = self.rfid.write(page_num, page_data)
+
             if error:
                 print(f"RFID: Error writing to page {page_num}")
                 return False
+            print(f"RFID: Successfully wrote page {page_num}")
 
         return True
 

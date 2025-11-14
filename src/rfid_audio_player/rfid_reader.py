@@ -222,6 +222,9 @@ class Reader:
         self.rfid.select_tag(uid)
         print("RFID: Tag selected successfully")
 
+        # Small delay to ensure tag is ready for write operations
+        time.sleep(0.1)
+
         # Create NDEF text record
         ndef_message = self._create_text_record(text, lang_code)
         if not ndef_message:
@@ -323,6 +326,43 @@ class Reader:
 
         return tlv
 
+    def _write_ntag_page(self, page_num: int, data: List[int]) -> bool:
+        """
+        Writes 4 bytes to an NTAG page using MIFARE Ultralight WRITE command (0xA2).
+
+        Args:
+            page_num: Page number to write to
+            data: List of 4 bytes to write
+
+        Returns:
+            True if write succeeded, False otherwise
+        """
+        if not self.rfid or len(data) != 4:
+            return False
+
+        # MIFARE Ultralight/NTAG WRITE command
+        NTAG_WRITE_CMD = 0xA2
+
+        # Build command: CMD + Page Address
+        buf = [NTAG_WRITE_CMD, page_num]
+
+        # Add the 4 data bytes
+        buf.extend(data)
+
+        # Calculate CRC for the complete command
+        crc = self.rfid.calculate_crc(buf)
+        buf.append(crc[0])
+        buf.append(crc[1])
+
+        # Send the write command
+        (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf)
+
+        # Check for ACK response (should be 4 bits with value 0x0A)
+        if not error and back_length == 4 and (back_data[0] & 0x0F) == 0x0A:
+            return True
+
+        return False
+
     def _write_pages(self, uid: List[int], data: bytes, start_page: int) -> bool:
         """
         Writes data to NTAG tag pages (4 bytes per page).
@@ -351,14 +391,18 @@ class Reader:
             if len(page_data) < 4:
                 page_data = page_data + bytes([0x00] * (4 - len(page_data)))
 
-            print(f"RFID: Writing page {page_num}: {page_data.hex()}")
+            print(f"RFID: Writing page {page_num}: {page_data.hex()} (bytes: {list(page_data)})")
 
-            error = self.rfid.write(page_num, list(page_data))
-            if error:
+            # Use NTAG-specific write method (0xA2 command for 4-byte pages)
+            success = self._write_ntag_page(page_num, list(page_data))
+            if not success:
                 print(f"RFID: Error writing page {page_num}")
                 return False
 
             print(f"RFID: Page {page_num} written successfully")
+
+            # Small delay between page writes
+            time.sleep(0.05)
 
         return True
 

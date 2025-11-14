@@ -1,11 +1,18 @@
 # config.py
 
 # GPIO Pin definitions (BCM)
-PIN_PLAY_PAUSE = 5
-PIN_VOL_UP = 6
-PIN_VOL_DOWN = 12
-PIN_NEXT = 16
-PIN_PREV = 26
+# PIN_PLAY_PAUSE = 5
+# PIN_VOL_UP = 6
+# PIN_VOL_DOWN = 12
+# PIN_NEXT = 16
+# PIN_PREV = 26
+
+# GPIO Pin definitions (physical)
+PIN_PLAY_PAUSE = 29
+PIN_VOL_UP = 31
+PIN_VOL_DOWN = 32
+PIN_NEXT = 36
+PIN_PREV = 37
 
 # RFID Reset Pin (physical)
 PIN_RFID_RST = 22

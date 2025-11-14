@@ -2,7 +2,6 @@
 import spidev
 import time
 from pirc522 import RFID
-import RPi.GPIO as GPIO
 from config import PIN_RFID_RST
 
 class Reader:
@@ -15,13 +14,11 @@ class Reader:
         self.last_uid = None
         
         try:
-            # pin_rst is the BCM pin number
-            # Explicitly specify SPI bus and device (0, 0 is the default for CE0)
+            # Initialize RFID reader with minimal parameters
+            # pirc522 uses gpiozero internally and will handle pin allocation
+            # Only specify the reset pin and SPI bus/device
             self.rfid = RFID(
-                pin_mode=GPIO.BCM,
                 pin_rst=PIN_RFID_RST,
-                pin_ce=8,
-                pin_irq=24,
                 bus=0,
                 device=0
             )

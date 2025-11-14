@@ -330,8 +330,8 @@ class Reader:
         """
         Writes 4 bytes to an NTAG page using MIFARE Ultralight WRITE command (0xA2).
 
-        MIFARE Ultralight/NTAG protocol sends everything in ONE transaction:
-        Command (0xA2) + Page Address + 4 Data Bytes
+        Implements the two-phase protocol based on pirc522 library's write() method,
+        but adapted for NTAG/Ultralight (0xA2 cmd, 4 bytes instead of 0xA0 cmd, 16 bytes).
 
         Args:
             page_num: Page number to write to
@@ -343,28 +343,39 @@ class Reader:
         if not self.rfid or len(data) != 4:
             return False
 
-        # MIFARE Ultralight/NTAG WRITE command
+        # MIFARE Ultralight/NTAG WRITE command (compatibility write)
         NTAG_WRITE_CMD = 0xA2
 
-        # Build complete command: CMD + Page + 4 Data Bytes (all in one transaction)
-        buf = [NTAG_WRITE_CMD, page_num]
-        buf.extend(data)
+        print(f"RFID: Writing page {page_num}: {[hex(b) for b in data]}")
 
-        # Calculate and append CRC
+        # Phase 1: Send write command and page address
+        buf = [NTAG_WRITE_CMD, page_num]
         crc = self.rfid.calculate_crc(buf)
         buf.append(crc[0])
         buf.append(crc[1])
 
-        print(f"RFID: Sending write buffer: {[hex(b) for b in buf]}")
-
-        # Send the complete write command
+        print(f"RFID: Phase 1 - Send command: {[hex(b) for b in buf]}")
         (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf)
 
-        print(f"RFID: Response - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+        print(f"RFID: Phase 1 response - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
 
-        # Check for ACK response (should be 4 bits with value 0x0A)
         if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:
-            print(f"RFID: Write failed - Expected ACK (0x0A), got NAK ({hex(back_data[0] & 0x0F) if not error and back_data else 'N/A'})")
+            print(f"RFID: Phase 1 failed - Expected ACK (0x0A), got {hex(back_data[0] & 0x0F) if not error and back_data else 'error'}")
+            return False
+
+        # Phase 2: Send the 4 data bytes
+        buf_w = list(data)  # Copy the 4 bytes
+        crc = self.rfid.calculate_crc(buf_w)
+        buf_w.append(crc[0])
+        buf_w.append(crc[1])
+
+        print(f"RFID: Phase 2 - Send data: {[hex(b) for b in buf_w]}")
+        (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf_w)
+
+        print(f"RFID: Phase 2 response - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+
+        if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:
+            print(f"RFID: Phase 2 failed - Expected ACK (0x0A), got {hex(back_data[0] & 0x0F) if not error and back_data else 'error'}")
             return False
 
         return True

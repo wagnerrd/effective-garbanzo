@@ -61,6 +61,9 @@ class Reader:
                 uid_bytes = uid_list
                 uid_str = "".join(map(str, uid_list))
 
+                # Read text payload from the tag
+                self._read_text_payload(uid_list)
+
                 # CRITICAL: Stop crypto communication to ready the reader for next tag
                 # Without this, the reader may get stuck and not detect new tags
                 self.rfid.stop_crypto()
@@ -81,6 +84,53 @@ class Reader:
         else:
             # The *same* tag is still on the reader, do nothing
             return None
+
+    def _read_text_payload(self, uid):
+        """
+        Reads text payload from RFID tag data blocks.
+
+        Args:
+            uid: The UID list of the tag
+        """
+        # Default MIFARE key (factory default)
+        default_key = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+
+        text_data = []
+
+        # Try to read from sectors 1-15 (skip sector 0 as it contains manufacturer data)
+        # Each sector has 4 blocks, and the last block is the sector trailer (keys)
+        for sector in range(1, 16):
+            # Calculate the first block of this sector
+            # Sectors 0-31: each has 4 blocks
+            block_addr = sector * 4
+
+            # Try to authenticate with key A
+            error = self.rfid.card_auth(self.rfid.auth_a, block_addr, default_key, uid)
+
+            if not error:
+                # Read the first 3 blocks of this sector (skip the trailer block)
+                for block_offset in range(3):
+                    current_block = block_addr + block_offset
+                    error, data = self.rfid.read(current_block)
+
+                    if not error and data:
+                        # Convert data to bytes and filter out null bytes
+                        block_text = bytes([b for b in data if 32 <= b <= 126])
+                        if block_text:
+                            try:
+                                decoded = block_text.decode('ascii', errors='ignore')
+                                if decoded.strip():  # Only add non-empty strings
+                                    text_data.append(decoded)
+                            except:
+                                pass
+
+        # Print the text payload if any was found
+        if text_data:
+            combined_text = ''.join(text_data).strip()
+            if combined_text:
+                print(f"RFID: Text payload: {combined_text}")
+        else:
+            print("RFID: No text payload found on tag")
 
     def cleanup(self):
         """

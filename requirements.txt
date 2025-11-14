@@ -1,0 +1,3 @@
+ndeflib
+pirc522
+spidev

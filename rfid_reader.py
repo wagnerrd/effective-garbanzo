@@ -3,6 +3,7 @@ import spidev
 import time
 from pirc522 import RFID
 from config import PIN_RFID_RST
+import ndef
 
 class Reader:
     def __init__(self):
@@ -87,7 +88,7 @@ class Reader:
 
     def _read_text_payload(self, uid):
         """
-        Reads text payload from RFID tag data blocks.
+        Reads and parses NDEF text payload from RFID tag.
 
         Args:
             uid: The UID list of the tag
@@ -95,7 +96,7 @@ class Reader:
         # Default MIFARE key (factory default)
         default_key = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
-        text_data = []
+        raw_data = bytearray()
 
         # Try to read from sectors 1-15 (skip sector 0 as it contains manufacturer data)
         # Each sector has 4 blocks, and the last block is the sector trailer (keys)
@@ -114,23 +115,49 @@ class Reader:
                     error, data = self.rfid.read(current_block)
 
                     if not error and data:
-                        # Convert data to bytes and filter out null bytes
-                        block_text = bytes([b for b in data if 32 <= b <= 126])
-                        if block_text:
-                            try:
-                                decoded = block_text.decode('ascii', errors='ignore')
-                                if decoded.strip():  # Only add non-empty strings
-                                    text_data.append(decoded)
-                            except:
-                                pass
+                        raw_data.extend(data)
 
-        # Print the text payload if any was found
-        if text_data:
-            combined_text = ''.join(text_data).strip()
-            if combined_text:
-                print(f"RFID: Text payload: {combined_text}")
+        # Try to parse NDEF message from the raw data
+        if raw_data:
+            try:
+                # NDEF messages typically start with 0x03 (NDEF Message TLV)
+                # Find the NDEF message in the raw data
+                ndef_start = -1
+                for i in range(len(raw_data) - 1):
+                    if raw_data[i] == 0x03:  # NDEF Message TLV
+                        ndef_start = i
+                        break
+
+                if ndef_start >= 0:
+                    # The byte after 0x03 is the length
+                    ndef_length = raw_data[ndef_start + 1]
+
+                    # Extract NDEF message data
+                    ndef_data = raw_data[ndef_start + 2:ndef_start + 2 + ndef_length]
+
+                    # Parse NDEF message
+                    records = list(ndef.message_decoder(bytes(ndef_data)))
+
+                    # Extract and print text records
+                    text_found = False
+                    for record in records:
+                        if isinstance(record, ndef.TextRecord):
+                            print(f"RFID: Text payload: {record.text}")
+                            print(f"RFID: Text language: {record.language}")
+                            text_found = True
+                        elif hasattr(record, 'text'):
+                            # Some NDEF implementations might use different record types
+                            print(f"RFID: Text payload: {record.text}")
+                            text_found = True
+
+                    if not text_found:
+                        print(f"RFID: NDEF message found but no text records (found {len(records)} record(s))")
+                else:
+                    print("RFID: No NDEF message found on tag")
+            except Exception as e:
+                print(f"RFID: Error parsing NDEF data: {e}")
         else:
-            print("RFID: No text payload found on tag")
+            print("RFID: No data could be read from tag")
 
     def cleanup(self):
         """

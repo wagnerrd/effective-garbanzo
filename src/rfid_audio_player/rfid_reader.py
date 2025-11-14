@@ -300,7 +300,7 @@ class Reader:
             print(f"RFID: Data too large ({len(data)} bytes, need {pages_needed} pages, only {TAG_NDEF_PAGE_COUNT} available)")
             return False
 
-        # Write data page by page
+        # Write data page by page using raw NTAG write command
         for i in range(pages_needed):
             page_num = start_page + i
             offset = i * 4
@@ -310,15 +310,19 @@ class Reader:
             while len(page_data) < 4:
                 page_data.append(0x00)
 
-            # For NTAG tags, use util_write instead of write
-            # util_write is for Mifare Ultralight/NTAG tags
-            if hasattr(self.rfid, 'util_write'):
-                error = self.rfid.util_write(page_num, page_data)
-            else:
-                error = self.rfid.write(page_num, page_data)
+            # Use raw transceive for NTAG write command (0xA2)
+            # Format: [CMD_WRITE (0xA2), PAGE, DATA[0], DATA[1], DATA[2], DATA[3]]
+            print(f"RFID: Writing to page {page_num}: {page_data}")
+            write_cmd = [0xA2, page_num] + page_data
 
-            if error:
-                print(f"RFID: Error writing to page {page_num}")
+            # Send the raw write command
+            status, back_data, back_length = self.rfid.card_write(write_cmd)
+
+            print(f"RFID: Write result - status={status}, back_data={back_data}, back_length={back_length}")
+
+            # Status 0 = OK for NTAG write
+            if status != 0:
+                print(f"RFID: Error writing to page {page_num}, status={status}")
                 return False
             print(f"RFID: Successfully wrote page {page_num}")
 

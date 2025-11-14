@@ -16,7 +16,7 @@ PIN_RFID_RST = 22
 MEDIA_PATH = "media/"
 
 # Supported audio file extensions
-SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav']
+SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav', '.m4a']
 
 # Map RFID UIDs to sub-directory names
 RFID_MEDIA_MAP = {

@@ -23,7 +23,7 @@ class WebServer:
         # Serve the main page
         @self.app.route('/')
         def index():
-            return send_from_directory('static', 'index.html')
+            return send_from_directory(self.app.static_folder, 'index.html')
 
         # Get current player status
         @self.app.route('/api/status', methods=['GET'])

@@ -10,7 +10,11 @@ class WebServer:
         """Initialize the Flask web server with a reference to the AudioPlayer and optional RFID Reader."""
         self.audio_player = audio_player
         self.rfid_reader = rfid_reader
-        self.app = Flask(__name__, static_folder='static', static_url_path='')
+        # Get the absolute path to the static folder (project root/static)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        static_folder = os.path.join(project_root, 'static')
+        self.app = Flask(__name__, static_folder=static_folder, static_url_path='')
         self._setup_routes()
 
     def _setup_routes(self):

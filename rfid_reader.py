@@ -18,6 +18,7 @@ class Reader:
         pirc522 library, which uses gpiozero for the reset pin.
         """
         self.rfid = None
+        self.util = None
         self.last_uid = None
         
         try:
@@ -33,6 +34,8 @@ class Reader:
             time.sleep(0.1)
             print("RFID Reader initialized successfully.")
             print(f"Using SPI bus 0, device 0, RST pin: {PIN_RFID_RST}")
+            self.util = self.rfid.util()
+            self.util.debug = False
         except Exception as e:
             print(f"Error initializing RFID reader: {e}")
             print("Have you enabled the SPI interface? (sudo raspi-config)")
@@ -180,16 +183,20 @@ class Reader:
 
         try:
             self.rfid.select_tag(uid_bytes)
+            if self.util:
+                self.util.set_tag(uid_bytes)
+                self.util.load_key(TAG_AUTH_KEY)
 
             for block in blocks:
                 # Skip sector trailer blocks (every 4th block on MIFARE Classic 1K)
                 if block >= 0 and (block + 1) % 4 == 0:
                     continue
 
-                auth_error = self.rfid.auth(self.rfid.auth_a, block, TAG_AUTH_KEY)
-                if auth_error:
-                    print(f"RFID: Authentication failed for block {block}.")
-                    return None
+                if self.util:
+                    auth_error = self.util.auth(self.rfid.auth_a, block)
+                    if auth_error:
+                        print(f"RFID: Authentication failed for block {block}.")
+                        return None
 
                 (read_error, data) = self.rfid.read(block)
                 if read_error:

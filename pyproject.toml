@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0.0",
     "gpiozero>=2.0.1",
+    "ndeflib>=0.3.3",
     "pi-rc522",
     "pygame>=2.6.1",
     "rpi-lgpio>=0.6",

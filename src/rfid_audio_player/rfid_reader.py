@@ -205,11 +205,6 @@ class Reader:
         if error:
             return False, "Failed to read tag UID"
 
-        # Select the tag for writing
-        error = self.rfid.select_tag(uid)
-        if error:
-            return False, "Failed to select tag for writing"
-
         try:
             # Create NDEF text record
             ndef_record = self._create_ndef_text_record(text)
@@ -315,7 +310,9 @@ class Reader:
             while len(page_data) < 4:
                 page_data.append(0x00)
 
+            print(f"RFID: Writing to page {page_num}: {page_data}")
             error = self.rfid.write(page_num, page_data)
+            print(f"RFID: Write result - error={error}, type={type(error)}")
             if error:
                 print(f"RFID: Error writing to page {page_num}")
                 return False

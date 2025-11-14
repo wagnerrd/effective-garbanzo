@@ -185,6 +185,149 @@ class Reader:
             print(f"RFID: Failed to parse NDEF text record: {exc}")
             return None
 
+    def write_text_to_tag(self, text: str) -> tuple[bool, str]:
+        """
+        Writes an NDEF text record to the currently present tag.
+        Returns (success, message) tuple.
+        """
+        if not self.rfid:
+            return False, "RFID reader not initialized"
+
+        if not text:
+            return False, "Text payload cannot be empty"
+
+        # First, detect the tag
+        (error, _) = self.rfid.request()
+        if error:
+            return False, "No tag detected. Please place a tag on the reader."
+
+        (error, uid) = self.rfid.anticoll()
+        if error:
+            return False, "Failed to read tag UID"
+
+        try:
+            # Create NDEF text record
+            ndef_record = self._create_ndef_text_record(text)
+            if not ndef_record:
+                return False, "Failed to create NDEF record"
+
+            # Wrap in TLV structure
+            tlv_data = self._create_tlv_structure(ndef_record)
+
+            # Write to tag
+            success = self._write_pages(uid, TAG_NDEF_START_PAGE, tlv_data)
+
+            self.rfid.stop_crypto()
+
+            if success:
+                print(f"RFID: Successfully wrote text '{text}' to tag")
+                return True, f"Successfully wrote '{text}' to tag"
+            else:
+                return False, "Failed to write data to tag"
+
+        except Exception as exc:
+            print(f"RFID: Error writing to tag: {exc}")
+            return False, f"Error writing to tag: {str(exc)}"
+
+    def _create_ndef_text_record(self, text: str, language: str = "en") -> Optional[bytes]:
+        """
+        Creates an NDEF Well-Known Text record from the given text.
+        """
+        try:
+            # Encode text as UTF-8
+            text_bytes = text.encode("utf-8")
+
+            # Status byte: UTF-8 (bit 7 = 0) + language code length
+            status_byte = len(language) & 0x3F
+
+            # Payload: status + language code + text
+            payload = bytes([status_byte]) + language.encode("ascii") + text_bytes
+            payload_length = len(payload)
+
+            # Record header
+            # MB=1 (Message Begin), ME=1 (Message End), CF=0, SR=1 (Short Record), IL=0, TNF=0x01 (Well-Known)
+            header = 0xD1  # 11010001
+
+            # Type length (1 byte for "T")
+            type_length = 1
+
+            # Build the NDEF record
+            record = bytes([
+                header,
+                type_length,
+                payload_length,
+                ord('T')  # Type: Text
+            ]) + payload
+
+            return record
+
+        except Exception as exc:
+            print(f"RFID: Failed to create NDEF text record: {exc}")
+            return None
+
+    def _create_tlv_structure(self, ndef_message: bytes) -> bytes:
+        """
+        Wraps the NDEF message in a TLV (Type-Length-Value) structure.
+        """
+        ndef_length = len(ndef_message)
+
+        # TLV: Type (0x03 = NDEF Message), Length, Value, Terminator (0xFE)
+        if ndef_length < 255:
+            # Short form
+            tlv = bytes([0x03, ndef_length]) + ndef_message + bytes([0xFE])
+        else:
+            # Long form (3-byte length)
+            tlv = bytes([0x03, 0xFF, (ndef_length >> 8) & 0xFF, ndef_length & 0xFF]) + ndef_message + bytes([0xFE])
+
+        # Pad to multiple of 4 bytes (page size)
+        padding_needed = (4 - (len(tlv) % 4)) % 4
+        tlv += bytes([0x00] * padding_needed)
+
+        return tlv
+
+    def _write_pages(self, uid: List[int], start_page: int, data: bytes) -> bool:
+        """
+        Writes data to NTAG-style tags (4 bytes per page).
+        """
+        if not self.rfid:
+            return False
+
+        # Calculate how many pages we need
+        pages_needed = (len(data) + 3) // 4  # Round up
+
+        # Check if we have enough space
+        if pages_needed > TAG_NDEF_PAGE_COUNT:
+            print(f"RFID: Data too large ({len(data)} bytes, need {pages_needed} pages, only {TAG_NDEF_PAGE_COUNT} available)")
+            return False
+
+        # Write data page by page using raw NTAG write command
+        for i in range(pages_needed):
+            page_num = start_page + i
+            offset = i * 4
+            page_data = list(data[offset:offset + 4])
+
+            # Pad if necessary
+            while len(page_data) < 4:
+                page_data.append(0x00)
+
+            # Use raw transceive for NTAG write command (0xA2)
+            # Format: [CMD_WRITE (0xA2), PAGE, DATA[0], DATA[1], DATA[2], DATA[3]]
+            print(f"RFID: Writing to page {page_num}: {page_data}")
+            write_cmd = [0xA2, page_num] + page_data
+
+            # Send the raw write command
+            status, back_data, back_length = self.rfid.card_write(write_cmd)
+
+            print(f"RFID: Write result - status={status}, back_data={back_data}, back_length={back_length}")
+
+            # Status 0 = OK for NTAG write
+            if status != 0:
+                print(f"RFID: Error writing to page {page_num}, status={status}")
+                return False
+            print(f"RFID: Successfully wrote page {page_num}")
+
+        return True
+
     def cleanup(self):
         if self.rfid:
             self.rfid.cleanup()

@@ -6,10 +6,16 @@ import pygame
 from .config import MEDIA_PATH, SUPPORTED_EXTENSIONS
 
 class WebServer:
-    def __init__(self, audio_player):
-        """Initialize the Flask web server with a reference to the AudioPlayer."""
+    def __init__(self, audio_player, rfid_reader=None):
+        """Initialize the Flask web server with a reference to the AudioPlayer and optional RFID Reader."""
         self.audio_player = audio_player
-        self.app = Flask(__name__, static_folder='static', static_url_path='')
+        self.rfid_reader = rfid_reader
+
+        # Get absolute path to static folder (at project root)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        self.static_folder = os.path.join(project_root, 'static')
+
+        self.app = Flask(__name__, static_folder=self.static_folder, static_url_path='')
         self._setup_routes()
 
     def _setup_routes(self):
@@ -18,7 +24,7 @@ class WebServer:
         # Serve the main page
         @self.app.route('/')
         def index():
-            return send_from_directory('static', 'index.html')
+            return send_from_directory(self.static_folder, 'index.html')
 
         # Get current player status
         @self.app.route('/api/status', methods=['GET'])
@@ -178,6 +184,26 @@ class WebServer:
                 return jsonify({'success': True, 'message': f'Deleted folder {folder_name}'})
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
+
+        # Write text to NFC tag
+        @self.app.route('/api/nfc/write', methods=['POST'])
+        def write_nfc():
+            if not self.rfid_reader:
+                return jsonify({'error': 'RFID reader not available'}), 503
+
+            data = request.get_json()
+            text = data.get('text', '').strip()
+
+            if not text:
+                return jsonify({'error': 'Text payload is required'}), 400
+
+            # Attempt to write to the tag
+            success, message = self.rfid_reader.write_text_to_tag(text)
+
+            if success:
+                return jsonify({'success': True, 'message': message})
+            else:
+                return jsonify({'success': False, 'error': message}), 400
 
     def run(self, host='0.0.0.0', port=5000):
         """Run the Flask server in a separate thread."""

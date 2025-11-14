@@ -46,7 +46,7 @@ if __name__ == "__main__":
             if uid is not None:
                 print(f"Main loop detected new UID: {uid}, text {text}")
                 if text is None:
-                    print("⚠️  No NDEF text found on tag.")
+                    print("No text found on tag.")
                 else:
                     player.load_playlist(text)
             

@@ -97,8 +97,22 @@ class Reader:
         default_key = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
         raw_data = bytearray()
+        blocks_read = 0
+        auth_failures = 0
 
-        # Try to read from sectors 1-15 (skip sector 0 as it contains manufacturer data)
+        # Read blocks 1-3 from sector 0 (block 0 is manufacturer data, don't read it)
+        # NDEF data often starts at block 1 or block 4
+        error = self.rfid.card_auth(self.rfid.auth_a, 0, default_key, uid)
+        if not error:
+            for block_num in range(1, 4):  # Read blocks 1, 2, 3
+                error, data = self.rfid.read(block_num)
+                if not error and data:
+                    raw_data.extend(data)
+                    blocks_read += 1
+        else:
+            auth_failures += 1
+
+        # Try to read from sectors 1-15
         # Each sector has 4 blocks, and the last block is the sector trailer (keys)
         for sector in range(1, 16):
             # Calculate the first block of this sector
@@ -116,6 +130,11 @@ class Reader:
 
                     if not error and data:
                         raw_data.extend(data)
+                        blocks_read += 1
+            else:
+                auth_failures += 1
+
+        print(f"RFID: Read {blocks_read} blocks from tag, {auth_failures} authentication failures")
 
         # Try to parse NDEF message from the raw data
         if raw_data:
@@ -131,12 +150,14 @@ class Reader:
                 if ndef_start >= 0:
                     # The byte after 0x03 is the length
                     ndef_length = raw_data[ndef_start + 1]
+                    print(f"RFID: Found NDEF TLV at offset {ndef_start}, length: {ndef_length} bytes")
 
                     # Extract NDEF message data
                     ndef_data = raw_data[ndef_start + 2:ndef_start + 2 + ndef_length]
 
                     # Parse NDEF message
                     records = list(ndef.message_decoder(bytes(ndef_data)))
+                    print(f"RFID: Decoded {len(records)} NDEF record(s)")
 
                     # Extract and print text records
                     text_found = False
@@ -149,15 +170,22 @@ class Reader:
                             # Some NDEF implementations might use different record types
                             print(f"RFID: Text payload: {record.text}")
                             text_found = True
+                        else:
+                            print(f"RFID: Found non-text record: {type(record).__name__}")
 
                     if not text_found:
-                        print(f"RFID: NDEF message found but no text records (found {len(records)} record(s))")
+                        print(f"RFID: No text records found in NDEF message")
                 else:
-                    print("RFID: No NDEF message found on tag")
+                    print("RFID: No NDEF TLV (0x03) marker found in tag data")
+                    # Show first 64 bytes for debugging
+                    preview = ' '.join(f'{b:02X}' for b in raw_data[:64])
+                    print(f"RFID: First 64 bytes: {preview}")
             except Exception as e:
                 print(f"RFID: Error parsing NDEF data: {e}")
+                import traceback
+                traceback.print_exc()
         else:
-            print("RFID: No data could be read from tag")
+            print("RFID: No data could be read from tag (all blocks failed)")
 
     def cleanup(self):
         """

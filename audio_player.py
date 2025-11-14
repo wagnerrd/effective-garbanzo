@@ -2,7 +2,7 @@
 import pygame
 import os
 from config import (
-    MEDIA_PATH, SUPPORTED_EXTENSIONS, 
+    MEDIA_PATH, SUPPORTED_EXTENSIONS,
     RFID_MEDIA_MAP, DEFAULT_VOLUME
 )
 
@@ -16,7 +16,7 @@ class AudioPlayer:
         except pygame.error as e:
             print(f"Error initializing pygame mixer: {e}")
             print("Do you have a valid audio output device connected (e.g., USB audio)?")
-            
+
         # State variables
         self.current_playlist = []  # List of full file paths
         self.current_track_index = -1
@@ -66,40 +66,47 @@ class AudioPlayer:
             pygame.mixer.music.play()
             self.playing = True
             self.paused = False
-            print(f"Playing: {os.path.basename(track_path)}")
+            track_num = self.current_track_index + 1
+            total_tracks = len(self.current_playlist)
+            print(f"♪ Now Playing [{track_num}/{total_tracks}]: {os.path.basename(track_path)}")
         except pygame.error as e:
-            print(f"Error playing track {track_path}: {e}")
+            print(f"❌ Error playing track {track_path}: {e}")
 
     def toggle_pause(self):
         """Toggles play/pause state."""
         if not self.playing:
+            print("No music is currently playing. Please scan an RFID tag first.")
             return
 
         if self.paused:
             pygame.mixer.music.unpause()
             self.paused = False
-            print("Resumed.")
+            print("▶ Resumed playback.")
         else:
             pygame.mixer.music.pause()
             self.paused = True
-            print("Paused.")
+            print("⏸ Paused.")
 
     def next_track(self):
         """Skips to the next track in the playlist, wrapping around."""
         if not self.current_playlist:
+            print("No playlist loaded. Please scan an RFID tag first.")
             return
-        
+
         # Increment index and wrap around if at the end
         self.current_track_index = (self.current_track_index + 1) % len(self.current_playlist)
+        print(f"⏭ Next track ({self.current_track_index + 1}/{len(self.current_playlist)})")
         self._play_current_track()
 
     def prev_track(self):
         """Goes to the previous track, wrapping around."""
         if not self.current_playlist:
+            print("No playlist loaded. Please scan an RFID tag first.")
             return
 
         # Decrement index and wrap around if at the beginning
         self.current_track_index = (self.current_track_index - 1) % len(self.current_playlist)
+        print(f"⏮ Previous track ({self.current_track_index + 1}/{len(self.current_playlist)})")
         self._play_current_track()
 
     def volume_up(self):
@@ -107,14 +114,16 @@ class AudioPlayer:
         current_vol = pygame.mixer.music.get_volume()
         new_vol = min(current_vol + 0.1, 1.0) # Cap at 1.0
         pygame.mixer.music.set_volume(new_vol)
-        print(f"Volume: {int(new_vol * 100)}%")
+        vol_bar = "█" * int(new_vol * 10) + "░" * (10 - int(new_vol * 10))
+        print(f"🔊 Volume: [{vol_bar}] {int(new_vol * 100)}%")
 
     def volume_down(self):
         """Decreases volume by 10%."""
         current_vol = pygame.mixer.music.get_volume()
         new_vol = max(current_vol - 0.1, 0.0) # Floor at 0.0
         pygame.mixer.music.set_volume(new_vol)
-        print(f"Volume: {int(new_vol * 100)}%")
+        vol_bar = "█" * int(new_vol * 10) + "░" * (10 - int(new_vol * 10))
+        print(f"🔉 Volume: [{vol_bar}] {int(new_vol * 100)}%")
 
     def check_for_song_end(self):
         """
@@ -124,8 +133,15 @@ class AudioPlayer:
         if self.playing and not self.paused:
             # get_busy() returns True if music is playing
             if not pygame.mixer.music.get_busy():
-                print("Song finished, playing next.")
-                self.next_track()
+                # Check if we're at the last track
+                is_last_track = (self.current_track_index == len(self.current_playlist) - 1)
+
+                if is_last_track:
+                    print("✓ Playlist finished.")
+                    self.playing = False
+                else:
+                    print("Song finished, playing next.")
+                    self.next_track()
 
     def stop(self):
         """Stops playback and clears the playlist."""

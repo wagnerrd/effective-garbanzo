@@ -13,21 +13,25 @@ if __name__ == "__main__":
     # Initialize components
     player = None
     reader = None
-    
+    buttons = None
+
     try:
         # 1. Initialize the core components
+        print("🎵 Initializing PhonieBox Minimal...")
         player = AudioPlayer()
         reader = Reader()
-        
+
         # 2. Initialize the button handler and pass it the player
         #    This automatically links all button events.
-        buttons = ButtonControls(player) 
+        buttons = ButtonControls(player)
 
-        print("\n---------------------------------")
-        print(" PhonieBox Minimal is RUNNING")
-        print(" Waiting for an RFID tag...")
-        print(" (Press Ctrl+C to exit)")
-        print("---------------------------------")
+        print("\n" + "="*50)
+        print("  🎵 PhonieBox Minimal is RUNNING 🎵")
+        print("="*50)
+        print("📡 Waiting for an RFID tag...")
+        print("🎮 Button controls are active")
+        print("🛑 Press Ctrl+C to exit")
+        print("="*50 + "\n")
 
         # 3. Start the main application loop
         while True:
@@ -49,12 +53,17 @@ if __name__ == "__main__":
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\nShutting down... (Ctrl+C pressed)")
-    
+        print("\n\n🛑 Shutting down... (Ctrl+C pressed)")
+
     finally:
         # 4. Clean up resources
+        print("\n🧹 Cleaning up resources...")
         if player:
             player.quit()
+            print("  ✓ Audio player shut down")
         if reader:
             reader.cleanup()
-        print("Goodbye.")
+            print("  ✓ RFID reader cleaned up")
+        if buttons:
+            buttons.cleanup()
+        print("\n👋 Goodbye!")

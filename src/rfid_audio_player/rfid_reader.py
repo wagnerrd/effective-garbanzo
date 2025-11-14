@@ -205,6 +205,11 @@ class Reader:
         if error:
             return False, "Failed to read tag UID"
 
+        # Select the tag for writing
+        error = self.rfid.select_tag(uid)
+        if error:
+            return False, "Failed to select tag for writing"
+
         try:
             # Create NDEF text record
             ndef_record = self._create_ndef_text_record(text)

@@ -59,7 +59,7 @@ class ButtonControls:
         # Note: 'bounce_time=0.1' (100ms) is added to prevent
         # a single physical press from registering multiple times.
 
-    def _on_play_pause(self):
+    def _on_play_pause(self, button):
         """Handler for play/pause button press."""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -68,7 +68,7 @@ class ButtonControls:
         except Exception as e:
             print(f"❌ Error handling play/pause: {e}")
 
-    def _on_volume_up(self):
+    def _on_volume_up(self, button):
         """Handler for volume up button press."""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -77,7 +77,7 @@ class ButtonControls:
         except Exception as e:
             print(f"❌ Error handling volume up: {e}")
 
-    def _on_volume_down(self):
+    def _on_volume_down(self, button):
         """Handler for volume down button press."""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -86,7 +86,7 @@ class ButtonControls:
         except Exception as e:
             print(f"❌ Error handling volume down: {e}")
 
-    def _on_next_track(self):
+    def _on_next_track(self, button):
         """Handler for next track button press."""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -95,7 +95,7 @@ class ButtonControls:
         except Exception as e:
             print(f"❌ Error handling next track: {e}")
 
-    def _on_prev_track(self):
+    def _on_prev_track(self, button):
         """Handler for previous track button press."""
         try:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]

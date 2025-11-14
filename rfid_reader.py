@@ -14,18 +14,21 @@ class Reader:
         self.last_uid = None
         
         try:
-            # Initialize RFID reader with minimal parameters
-            # pirc522 uses gpiozero internally and will handle pin allocation
-            # Only specify the reset pin and SPI bus/device
+            # Initialize RFID reader using BOARD pin numbering
+            # GPIO 25 (BCM) = Physical Pin 22 (BOARD)
+            # The pirc522 library uses BOARD numbering by default
+            board_pin_rst = 22  # Physical pin 22 = GPIO25 in BCM
+
             self.rfid = RFID(
-                pin_rst=PIN_RFID_RST,
+                pin_rst=board_pin_rst,
+                pin_irq=None,  # Not using interrupt pin
                 bus=0,
                 device=0
             )
             # Give the RFID module time to stabilize after initialization
             time.sleep(0.1)
             print("RFID Reader initialized successfully.")
-            print(f"Using SPI bus 0, device 0, RST pin: {PIN_RFID_RST}")
+            print(f"Using SPI bus 0, device 0, RST pin: Physical {board_pin_rst} (GPIO{PIN_RFID_RST} BCM)")
         except Exception as e:
             print(f"Error initializing RFID reader: {e}")
             print("Have you enabled the SPI interface? (sudo raspi-config)")

@@ -40,7 +40,7 @@ Or using pip:
 pip install -e .
 ```
 
-3. Configure your RFID-to-media mappings in `config.py`:
+3. Configure your RFID-to-media mappings in `src/rfid_audio_player/config.py`:
 ```python
 RFID_MEDIA_MAP = {
     '1364185516': 'Spiderman',  # Maps to media/Spiderman/
@@ -104,11 +104,11 @@ Default pin assignments (BCM numbering):
 - GPIO 16: Next Track
 - GPIO 26: Previous Track
 
-Customize these in `config.py`.
+Customize these in `src/rfid_audio_player/config.py`.
 
 ## Configuration
 
-Edit `config.py` to customize:
+Edit `src/rfid_audio_player/config.py` to customize:
 - GPIO pin assignments
 - RFID tag to folder mappings
 - Default volume level
@@ -119,17 +119,31 @@ Edit `config.py` to customize:
 
 ```
 effective-garbanzo/
-├── main.py              # Main application entry point
-├── audio_player.py      # Audio playback logic (pygame)
-├── rfid_reader.py       # RFID tag reading
-├── button_handler.py    # GPIO button event handlers
-├── web_server.py        # Flask web server
-├── config.py            # Configuration settings
-├── static/              # Web interface files
-│   └── index.html       # Web UI
-├── media/               # Media files (not in git)
+├── main.py                         # Main application entry point
+├── src/
+│   └── rfid_audio_player/          # Core package
+│       ├── __init__.py
+│       ├── audio_player.py         # Audio playback logic (pygame)
+│       ├── rfid_reader.py          # RFID tag reading
+│       ├── button_handler.py       # GPIO button event handlers
+│       ├── web_server.py           # Flask web server
+│       └── config.py               # Configuration settings
+├── scripts/                        # Utility scripts
+│   ├── diagnose_tag.py             # RFID tag diagnostic tool
+│   └── write_tag.py                # RFID tag writing utility
+├── tests/                          # Unit tests
+│   ├── __init__.py
+│   ├── test_audio_player.py
+│   ├── test_button_handler.py
+│   ├── test_config.py
+│   └── test_rfid_reader.py
+├── static/                         # Web interface files
+│   └── index.html                  # Web UI
+├── media/                          # Media files (not in git)
 │   ├── Spiderman/
 │   └── album-B/
+├── pyproject.toml                  # Project configuration
+├── requirements.txt
 └── README.md
 
 ```
@@ -155,6 +169,21 @@ The web server provides the following REST API endpoints:
 - MP3 (`.mp3`)
 - Ogg Vorbis (`.ogg`)
 - WAV (`.wav`)
+
+## Running Tests
+
+The project includes a comprehensive test suite. To run the tests:
+
+```bash
+# Run all tests
+python -m unittest discover tests
+
+# Run a specific test file
+python -m unittest tests.test_audio_player
+
+# Run with verbose output
+python -m unittest discover tests -v
+```
 
 ## Troubleshooting
 

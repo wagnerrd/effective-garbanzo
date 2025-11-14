@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pirc522 import RFID
 
-from config import (
+from .config import (
     PIN_RFID_RST,
     TAG_NDEF_START_PAGE,
     TAG_NDEF_PAGE_COUNT,

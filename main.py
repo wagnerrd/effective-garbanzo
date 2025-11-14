@@ -1,9 +1,6 @@
 # main.py
 import time
-from audio_player import AudioPlayer
-from rfid_reader import Reader
-from button_handler import ButtonControls
-from web_server import WebServer
+from src.rfid_audio_player import AudioPlayer, Reader, ButtonControls, WebServer
 
 if __name__ == "__main__":
     """

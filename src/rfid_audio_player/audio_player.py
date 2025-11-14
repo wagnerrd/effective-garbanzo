@@ -2,7 +2,7 @@
 import pygame
 from random import shuffle
 import os
-from config import (
+from .config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
     DEFAULT_VOLUME
 )

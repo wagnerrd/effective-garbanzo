@@ -1,6 +1,6 @@
 import time
 
-from rfid_reader import Reader
+from src.rfid_audio_player import Reader
 
 
 def main():

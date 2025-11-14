@@ -3,7 +3,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import os
 import threading
 import pygame
-from config import MEDIA_PATH, SUPPORTED_EXTENSIONS
+from .config import MEDIA_PATH, SUPPORTED_EXTENSIONS
 
 class WebServer:
     def __init__(self, audio_player):

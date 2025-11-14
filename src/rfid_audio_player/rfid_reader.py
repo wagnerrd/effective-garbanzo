@@ -217,13 +217,9 @@ class Reader:
         uid_str = "".join(map(str, uid))
         print(f"RFID: Tag detected with UID: {uid_str}")
 
-        # Select the tag for communication
-        print("RFID: Selecting tag...")
-        self.rfid.select_tag(uid)
-        print("RFID: Tag selected successfully")
-
-        # Small delay to ensure tag is ready for write operations
-        time.sleep(0.1)
+        # Note: We do NOT call select_tag() for NTAG/Ultralight cards
+        # Unlike MIFARE Classic, NTAG doesn't require selection/authentication
+        # Calling select_tag() actually makes the card unresponsive for read/write
 
         # Create NDEF text record
         ndef_message = self._create_text_record(text, lang_code)

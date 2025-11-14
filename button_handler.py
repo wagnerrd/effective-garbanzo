@@ -1,5 +1,6 @@
 # button_handler.py
 from gpiozero import Button
+from datetime import datetime
 from config import (
     PIN_PLAY_PAUSE,
     PIN_VOL_UP,
@@ -61,7 +62,8 @@ class ButtonControls:
     def _on_play_pause(self):
         """Handler for play/pause button press."""
         try:
-            print("[Button] Play/Pause pressed")
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] Button pressed: Play/Pause (GPIO {PIN_PLAY_PAUSE})")
             self.audio_player.toggle_pause()
         except Exception as e:
             print(f"❌ Error handling play/pause: {e}")
@@ -69,7 +71,8 @@ class ButtonControls:
     def _on_volume_up(self):
         """Handler for volume up button press."""
         try:
-            print("[Button] Volume Up pressed")
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] Button pressed: Volume Up (GPIO {PIN_VOL_UP})")
             self.audio_player.volume_up()
         except Exception as e:
             print(f"❌ Error handling volume up: {e}")
@@ -77,7 +80,8 @@ class ButtonControls:
     def _on_volume_down(self):
         """Handler for volume down button press."""
         try:
-            print("[Button] Volume Down pressed")
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] Button pressed: Volume Down (GPIO {PIN_VOL_DOWN})")
             self.audio_player.volume_down()
         except Exception as e:
             print(f"❌ Error handling volume down: {e}")
@@ -85,7 +89,8 @@ class ButtonControls:
     def _on_next_track(self):
         """Handler for next track button press."""
         try:
-            print("[Button] Next Track pressed")
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] Button pressed: Next Track (GPIO {PIN_NEXT})")
             self.audio_player.next_track()
         except Exception as e:
             print(f"❌ Error handling next track: {e}")
@@ -93,7 +98,8 @@ class ButtonControls:
     def _on_prev_track(self):
         """Handler for previous track button press."""
         try:
-            print("[Button] Previous Track pressed")
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] Button pressed: Previous Track (GPIO {PIN_PREV})")
             self.audio_player.prev_track()
         except Exception as e:
             print(f"❌ Error handling previous track: {e}")

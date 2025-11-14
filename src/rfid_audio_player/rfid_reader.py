@@ -343,25 +343,36 @@ class Reader:
         # MIFARE Ultralight/NTAG WRITE command
         NTAG_WRITE_CMD = 0xA2
 
-        # Build command: CMD + Page Address
+        # Step 1: Send command and page address
         buf = [NTAG_WRITE_CMD, page_num]
-
-        # Add the 4 data bytes
-        buf.extend(data)
-
-        # Calculate CRC for the complete command
         crc = self.rfid.calculate_crc(buf)
         buf.append(crc[0])
         buf.append(crc[1])
 
-        # Send the write command
         (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf)
 
         # Check for ACK response (should be 4 bits with value 0x0A)
-        if not error and back_length == 4 and (back_data[0] & 0x0F) == 0x0A:
-            return True
+        if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:
+            print(f"RFID: Write command failed - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+            return False
 
-        return False
+        # Step 2: Send the 4 data bytes
+        buf_data = []
+        for i in range(4):
+            buf_data.append(data[i])
+
+        crc = self.rfid.calculate_crc(buf_data)
+        buf_data.append(crc[0])
+        buf_data.append(crc[1])
+
+        (error, back_data, back_length) = self.rfid.card_write(self.rfid.mode_transrec, buf_data)
+
+        # Check for ACK response
+        if error or back_length != 4 or (back_data[0] & 0x0F) != 0x0A:
+            print(f"RFID: Write data failed - error={error}, back_length={back_length}, back_data={back_data if not error else 'N/A'}")
+            return False
+
+        return True
 
     def _write_pages(self, uid: List[int], data: bytes, start_page: int) -> bool:
         """

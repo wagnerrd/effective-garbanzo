@@ -4,7 +4,7 @@ from random import shuffle
 import os
 from config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
-    RFID_MEDIA_MAP, DEFAULT_VOLUME
+    DEFAULT_VOLUME
 )
 
 class AudioPlayer:
@@ -24,17 +24,16 @@ class AudioPlayer:
         self.paused = False
         self.playing = False
 
-    def load_playlist(self, rfid_uid):
+    def load_playlist(self, key):
         """
-        Loads a new playlist based on an RFID UID.
-        Stops current playback and starts playing the new list.
+        Loads a new playlist based on a key
         """
-        if rfid_uid not in RFID_MEDIA_MAP:
-            print(f"Error: UID {rfid_uid} not found in RFID_MEDIA_MAP.")
+        existing_folders = os.listdir(MEDIA_PATH)
+        if key not in existing_folders:
+            print(f"Error: no folder named {key} in media directory.")
             return
 
-        folder_name = RFID_MEDIA_MAP[rfid_uid]
-        folder_path = os.path.join(MEDIA_PATH, folder_name)
+        folder_path = os.path.join(MEDIA_PATH, key)
 
         if not os.path.isdir(folder_path):
             print(f"Error: Directory not found: {folder_path}")
@@ -52,7 +51,7 @@ class AudioPlayer:
             print(f"No audio files found in {folder_path}")
             return
         
-        print(f"Loaded {len(self.current_playlist)} tracks from '{folder_name}'.")
+        print(f"Loaded {len(self.current_playlist)} tracks from '{key}'.")
         self.current_track_index = 0
         self._play_current_track()
 
@@ -62,8 +61,8 @@ class AudioPlayer:
             print("No playlist loaded.")
             return
 
+        track_path = self.current_playlist[self.current_track_index]
         try:
-            track_path = self.current_playlist[self.current_track_index]
             pygame.mixer.music.load(track_path)
             pygame.mixer.music.play()
             self.playing = True

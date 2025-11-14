@@ -30,13 +30,13 @@ class Reader:
             print(f"Error initialising RFID reader: {exc}")
             print("Ensure SPI is enabled and the RC522 is wired correctly.")
 
-    def read_tag(self) -> Optional[str]:
+    def read_tag(self) -> tuple[Optional[str], Optional[str]]:
         """
         Polls for a new RFID tag, returning its UID string the first time
         it is presented. Repeats are ignored until the card is removed.
         """
         if not self.rfid:
-            return None
+            return None, None
 
         uid_str = None
         uid_bytes: Optional[List[int]] = None
@@ -54,17 +54,15 @@ class Reader:
             print(f"RFID: New tag detected with UID {uid_str}")
 
             text_payload = self._read_ndef_text(uid_bytes)
-            if text_payload:
-                print(f"RFID: Tag text payload -> \"{text_payload}\"")
 
-            return uid_str
+            return uid_str, text_payload
 
         if not uid_str:
             if self.last_uid is not None:
                 print("RFID: Tag removed from reader")
             self.last_uid = None
 
-        return None
+        return None, None
 
     def _read_ndef_text(self, uid_bytes: Optional[List[int]]) -> Optional[str]:
         """
@@ -123,6 +121,8 @@ class Reader:
         final_page = start_page + page_count
 
         while current_page < final_page:
+            if self.rfid is None:
+                return None
             error, data = self.rfid.read(current_page)
             if error:
                 print(f"RFID: Error reading starting at page {current_page}.")

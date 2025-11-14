@@ -44,11 +44,11 @@ if __name__ == "__main__":
             # Check for a new RFID tag.
             # The reader.read_tag() method is smart and will
             # only return a UID once when a *new* tag is presented.
-            uid = reader.read_tag()
+            uid, text = reader.read_tag()
             
             if uid:
-                print(f"Main loop detected new UID: {uid}")
-                player.load_playlist(uid)
+                print(f"Main loop detected new UID: {uid}, text {text}")
+                player.load_playlist(text)
             
             # Check if the current song has finished playing.
             # This is necessary for auto-playing the next track.

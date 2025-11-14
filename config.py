@@ -18,12 +18,6 @@ MEDIA_PATH = "media/"
 # Supported audio file extensions
 SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav']
 
-# Map RFID UIDs to sub-directory names
-RFID_MEDIA_MAP = {
-    '1364185516': 'Spiderman',  # Will play all songs in 'media/album-A/'
-    '987123456': 'album-B',  # Will play all songs in 'media/album-B/'
-}
-
 # Initial volume (from 0.0 to 1.0)
 DEFAULT_VOLUME = 0.5
 

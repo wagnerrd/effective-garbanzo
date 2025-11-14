@@ -3,7 +3,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import os
 import threading
 import pygame
-from config import MEDIA_PATH, SUPPORTED_EXTENSIONS, RFID_MEDIA_MAP
+from config import MEDIA_PATH, SUPPORTED_EXTENSIONS
 
 class WebServer:
     def __init__(self, audio_player):
@@ -77,18 +77,9 @@ class WebServer:
                             f for f in os.listdir(folder_path)
                             if any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS)
                         ]
-                        # Check if mapped to RFID
-                        rfid_uid = None
-                        for uid, folder_name in RFID_MEDIA_MAP.items():
-                            if folder_name == item:
-                                rfid_uid = uid
-                                break
-
                         folders.append({
                             'name': item,
                             'file_count': len(audio_files),
-                            'rfid_mapped': rfid_uid is not None,
-                            'rfid_uid': rfid_uid
                         })
             return jsonify({'folders': folders})
 
@@ -136,7 +127,7 @@ class WebServer:
                 return jsonify({'error': 'No file provided'}), 400
 
             file = request.files['file']
-            if file.filename == '':
+            if file.filename is None or file.filename == '':
                 return jsonify({'error': 'No file selected'}), 400
 
             # Check file extension

@@ -20,7 +20,7 @@ SUPPORTED_EXTENSIONS = ['.mp3', '.ogg', '.wav']
 
 # Map RFID UIDs to sub-directory names
 RFID_MEDIA_MAP = {
-    '234876123': 'album-A',  # Will play all songs in 'media/album-A/'
+    '1364185516': 'Spiderman',  # Will play all songs in 'media/album-A/'
     '987123456': 'album-B',  # Will play all songs in 'media/album-B/'
 }
 

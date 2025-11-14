@@ -7,8 +7,8 @@ PIN_VOL_DOWN = 12
 PIN_NEXT = 16
 PIN_PREV = 26
 
-# RFID Reset Pin
-PIN_RFID_RST = 25
+# RFID Reset Pin (physical)
+PIN_RFID_RST = 22
 
 # --- Audio Player Settings ---
 

@@ -217,6 +217,11 @@ class Reader:
         uid_str = "".join(map(str, uid))
         print(f"RFID: Tag detected with UID: {uid_str}")
 
+        # Select the tag for communication
+        print("RFID: Selecting tag...")
+        self.rfid.select_tag(uid)
+        print("RFID: Tag selected successfully")
+
         # Create NDEF text record
         ndef_message = self._create_text_record(text, lang_code)
         if not ndef_message:

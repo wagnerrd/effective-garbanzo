@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RFID Audio Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .player-status {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .now-playing {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .track-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .track-info {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn.play-pause {
+            width: 80px;
+            height: 80px;
+            font-size: 2em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .volume-control {
+            margin: 20px 0;
+        }
+
+        .volume-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .volume-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            outline: none;
+            -webkit-appearance: none;
+            background: #ddd;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .folder-list, .file-list {
+            list-style: none;
+        }
+
+        .folder-item, .file-item {
+            background: #f8f8f8;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .folder-item:hover, .file-item:hover {
+            background: #f0f0f0;
+        }
+
+        .folder-info, .file-info {
+            flex: 1;
+        }
+
+        .folder-name, .file-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .folder-meta, .file-meta {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .badge {
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.75em;
+            margin-left: 5px;
+        }
+
+        .btn-small {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-left: 5px;
+        }
+
+        .btn-small.danger {
+            background: #e74c3c;
+        }
+
+        .btn-small:active {
+            transform: scale(0.95);
+        }
+
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f8ff;
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .back-btn {
+            background: #f0f0f0;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+
+        .new-folder-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .new-folder-form input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5em;
+            }
+
+            .controls {
+                gap: 10px;
+            }
+
+            .btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.2em;
+            }
+
+            .btn.play-pause {
+                width: 70px;
+                height: 70px;
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 RFID Audio Player</h1>
+            <p>Control your music from anywhere</p>
+        </div>
+
+        <div class="card">
+            <div class="player-status">
+                <div class="now-playing">Now Playing</div>
+                <div class="track-name" id="trackName">No track loaded</div>
+                <div class="track-info" id="trackInfo">Scan an RFID tag to start</div>
+            </div>
+
+            <div class="controls">
+                <button class="btn" onclick="prevTrack()" id="prevBtn" disabled>⏮️</button>
+                <button class="btn play-pause" onclick="togglePause()" id="playPauseBtn">▶️</button>
+                <button class="btn" onclick="nextTrack()" id="nextBtn" disabled>⏭️</button>
+            </div>
+
+            <div class="volume-control">
+                <div class="volume-label">
+                    <span>🔊 Volume</span>
+                    <span id="volumeValue">50%</span>
+                </div>
+                <input type="range" min="0" max="100" value="50" class="volume-slider" id="volumeSlider">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('folders')">Media Folders</button>
+                <button class="tab" onclick="switchTab('files')">Files</button>
+            </div>
+
+            <div id="foldersTab" class="tab-content active">
+                <div class="new-folder-form">
+                    <input type="text" id="newFolderName" placeholder="New folder name...">
+                    <button class="btn-small" onclick="createFolder()">Create</button>
+                </div>
+                <ul class="folder-list" id="folderList">
+                    <li class="empty-state">Loading folders...</li>
+                </ul>
+            </div>
+
+            <div id="filesTab" class="tab-content">
+                <button class="back-btn" onclick="backToFolders()">← Back to Folders</button>
+                <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                    <input type="file" id="fileInput" accept=".mp3,.ogg,.wav" multiple onchange="uploadFiles()">
+                    <p>📤 Tap to upload audio files</p>
+                    <p style="font-size: 0.85em; color: #999;">Supports MP3, OGG, WAV</p>
+                </div>
+                <ul class="file-list" id="fileList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFolder = null;
+        let updateInterval = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateStatus();
+            loadFolders();
+            startAutoUpdate();
+
+            // Volume slider
+            document.getElementById('volumeSlider').addEventListener('input', (e) => {
+                const volume = e.target.value;
+                document.getElementById('volumeValue').textContent = volume + '%';
+            });
+
+            document.getElementById('volumeSlider').addEventListener('change', (e) => {
+                setVolume(e.target.value);
+            });
+        });
+
+        function startAutoUpdate() {
+            updateInterval = setInterval(updateStatus, 2000);
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // Update track info
+                if (data.current_track) {
+                    document.getElementById('trackName').textContent = data.current_track;
+                    document.getElementById('trackInfo').textContent = `Track ${data.track_index} of ${data.total_tracks}`;
+                } else {
+                    document.getElementById('trackName').textContent = 'No track loaded';
+                    document.getElementById('trackInfo').textContent = 'Scan an RFID tag to start';
+                }
+
+                // Update play/pause button
+                const playPauseBtn = document.getElementById('playPauseBtn');
+                if (data.paused) {
+                    playPauseBtn.textContent = '▶️';
+                } else if (data.playing) {
+                    playPauseBtn.textContent = '⏸️';
+                } else {
+                    playPauseBtn.textContent = '▶️';
+                }
+
+                // Enable/disable controls
+                const hasPlaylist = data.total_tracks > 0;
+                document.getElementById('prevBtn').disabled = !hasPlaylist;
+                document.getElementById('nextBtn').disabled = !hasPlaylist;
+                document.getElementById('playPauseBtn').disabled = !data.playing && !data.paused;
+
+                // Update volume
+                document.getElementById('volumeSlider').value = data.volume;
+                document.getElementById('volumeValue').textContent = data.volume + '%';
+
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function togglePause() {
+            try {
+                await fetch('/api/pause', { method: 'POST' });
+                updateStatus();
+            } catch (error) {
+                console.error('Error toggling pause:', error);
+            }
+        }
+
+        async function nextTrack() {
+            try {
+                await fetch('/api/next', { method: 'POST' });
+                setTimeout(updateStatus, 300);
+            } catch (error) {
+                console.error('Error skipping track:', error);
+            }
+        }
+
+        async function prevTrack() {
+            try {
+                await fetch('/api/prev', { method: 'POST' });
+                setTimeout(updateStatus, 300);
+            } catch (error) {
+                console.error('Error going to previous track:', error);
+            }
+        }
+
+        async function setVolume(volume) {
+            try {
+                await fetch('/api/volume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volume: parseInt(volume) })
+                });
+            } catch (error) {
+                console.error('Error setting volume:', error);
+            }
+        }
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            if (tab === 'folders') {
+                document.getElementById('foldersTab').classList.add('active');
+                loadFolders();
+            } else {
+                document.getElementById('filesTab').classList.add('active');
+            }
+        }
+
+        async function loadFolders() {
+            try {
+                const response = await fetch('/api/media/folders');
+                const data = await response.json();
+                const folderList = document.getElementById('folderList');
+
+                if (data.folders.length === 0) {
+                    folderList.innerHTML = '<li class="empty-state">No folders yet. Create one to get started!</li>';
+                    return;
+                }
+
+                folderList.innerHTML = data.folders.map(folder => `
+                    <li class="folder-item">
+                        <div class="folder-info">
+                            <div class="folder-name">
+                                📁 ${folder.name}
+                                ${folder.rfid_mapped ? '<span class="badge">RFID</span>' : ''}
+                            </div>
+                            <div class="folder-meta">${folder.file_count} files</div>
+                        </div>
+                        <div>
+                            <button class="btn-small" onclick="openFolder('${folder.name}')">Open</button>
+                            <button class="btn-small danger" onclick="deleteFolder('${folder.name}')">Delete</button>
+                        </div>
+                    </li>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading folders:', error);
+            }
+        }
+
+        function openFolder(folderName) {
+            currentFolder = folderName;
+            switchTab('files');
+            loadFiles(folderName);
+        }
+
+        async function loadFiles(folderName) {
+            try {
+                const response = await fetch(`/api/media/folders/${folderName}/files`);
+                const data = await response.json();
+                const fileList = document.getElementById('fileList');
+
+                if (data.files.length === 0) {
+                    fileList.innerHTML = '<li class="empty-state">No files in this folder. Upload some audio files!</li>';
+                    return;
+                }
+
+                fileList.innerHTML = data.files.map(file => `
+                    <li class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">🎵 ${file.name}</div>
+                            <div class="file-meta">${file.size_mb} MB</div>
+                        </div>
+                        <button class="btn-small danger" onclick="deleteFile('${file.name}')">Delete</button>
+                    </li>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
+        }
+
+        function backToFolders() {
+            currentFolder = null;
+            switchTab('folders');
+        }
+
+        async function createFolder() {
+            const name = document.getElementById('newFolderName').value.trim();
+            if (!name) {
+                alert('Please enter a folder name');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/media/folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('newFolderName').value = '';
+                    loadFolders();
+                } else {
+                    alert(data.error || 'Error creating folder');
+                }
+            } catch (error) {
+                console.error('Error creating folder:', error);
+                alert('Error creating folder');
+            }
+        }
+
+        async function deleteFolder(folderName) {
+            if (!confirm(`Delete folder "${folderName}" and all its files?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/media/folders/${folderName}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    loadFolders();
+                } else {
+                    alert(data.error || 'Error deleting folder');
+                }
+            } catch (error) {
+                console.error('Error deleting folder:', error);
+                alert('Error deleting folder');
+            }
+        }
+
+        async function uploadFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+
+            if (!files.length || !currentFolder) {
+                return;
+            }
+
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch(`/api/media/folders/${currentFolder}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+                    if (!data.success) {
+                        alert(`Error uploading ${file.name}: ${data.error}`);
+                    }
+                } catch (error) {
+                    console.error(`Error uploading ${file.name}:`, error);
+                    alert(`Error uploading ${file.name}`);
+                }
+            }
+
+            fileInput.value = '';
+            loadFiles(currentFolder);
+        }
+
+        async function deleteFile(fileName) {
+            if (!confirm(`Delete "${fileName}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/media/folders/${currentFolder}/files/${fileName}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    loadFiles(currentFolder);
+                } else {
+                    alert(data.error || 'Error deleting file');
+                }
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                alert('Error deleting file');
+            }
+        }
+    </script>
+</body>
+</html>

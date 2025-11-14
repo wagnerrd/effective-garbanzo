@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
             # Poll every 100ms. This is idle time, preventing
             # the loop from using 100% CPU.
-            time.sleep(0.1)
+            time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n\n🛑 Shutting down... (Ctrl+C pressed)")

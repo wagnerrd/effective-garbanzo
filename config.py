@@ -26,3 +26,14 @@ RFID_MEDIA_MAP = {
 
 # Initial volume (from 0.0 to 1.0)
 DEFAULT_VOLUME = 0.5
+
+# --- RFID Tag Writing Settings ---
+
+# Starting block for NDEF data (block 4 is first user data block after manufacturer sector)
+TAG_NDEF_START_BLOCK = 4
+
+# Number of blocks to write (covers multiple sectors for larger payloads)
+TAG_NDEF_BLOCK_COUNT = 16
+
+# Default MIFARE authentication key (factory default is all 0xFF)
+TAG_AUTH_KEY = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]

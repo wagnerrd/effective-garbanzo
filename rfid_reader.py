@@ -1,196 +1,206 @@
 # rfid_reader.py
-import spidev
 import time
+from typing import Iterable, List, Optional
+
 from pirc522 import RFID
-from config import PIN_RFID_RST
-import ndef
+
+from config import (
+    PIN_RFID_RST,
+    TAG_NDEF_START_BLOCK,
+    TAG_NDEF_BLOCK_COUNT,
+    TAG_AUTH_KEY,
+)
+
 
 class Reader:
+    """
+    Thin wrapper around the pi-rc522 driver that handles UID polling and
+    optionally extracts a text payload from the NFC NDEF message stored
+    on the card.
+    """
+
     def __init__(self):
-        """
-        Initializes the RFID reader using the Pi 5-compatible
-        pirc522 library, which uses gpiozero for the reset pin.
-        """
-        self.rfid = None
-        self.util = None
-        self.last_uid = None
-        
+        self.rfid: Optional[RFID] = None
+        self.last_uid: Optional[str] = None
+
         try:
-            # Initialize RFID reader with minimal parameters
-            # pirc522 uses gpiozero internally and will handle pin allocation
-            # Only specify the reset pin and SPI bus/device
-            self.rfid = RFID(
-                pin_rst=PIN_RFID_RST,
-                bus=0,
-                device=0
-            )
-            # Give the RFID module time to stabilize after initialization
-            time.sleep(0.1)
-            print("RFID Reader initialized successfully.")
-            print(f"Using SPI bus 0, device 0, RST pin: {PIN_RFID_RST}")
-            self.util = self.rfid.util()
-            self.util.debug = False
-        except Exception as e:
-            print(f"Error initializing RFID reader: {e}")
-            print("Have you enabled the SPI interface? (sudo raspi-config)")
-            print("Check that the wiring is correct and the module has power.")
+            self.rfid = RFID(pin_rst=PIN_RFID_RST, bus=0, device=0)
+            time.sleep(0.1)  # Allow the RC522 to stabilise.
+            print("RFID reader initialised (SPI bus 0, device 0)")
+        except Exception as exc:
+            print(f"Error initialising RFID reader: {exc}")
+            print("Ensure SPI is enabled and the RC522 is wired correctly.")
 
-    def read_tag(self):
+    def read_tag(self) -> Optional[str]:
         """
-        Polls for a new RFID tag.
-
-        Returns:
-            str: The tag UID if a *new* tag is detected.
-            None: If no tag or the *same* tag is present.
+        Polls for a new RFID tag, returning its UID string the first time
+        it is presented. Repeats are ignored until the card is removed.
         """
-        if self.rfid is None:
-            return None # Reader failed to init
+        if not self.rfid:
+            return None
 
         uid_str = None
-        uid_bytes = None
+        uid_bytes: Optional[List[int]] = None
 
-        # 1. Request a tag
-        # This is a non-blocking call
-        (error, tag_type) = self.rfid.request()
-
+        (error, _) = self.rfid.request()
         if not error:
-            # 2. If a tag is present, get its UID
-            (error, uid_list) = self.rfid.anticoll()
-
+            (error, uid) = self.rfid.anticoll()
             if not error:
-                # Convert the UID list [123, 45, 67, 89] to a string "123456789"
-                uid_bytes = uid_list
-                uid_str = "".join(map(str, uid_list))
-
-                # Read text payload from the tag
-                self._read_text_payload(uid_list)
-
-                # CRITICAL: Stop crypto communication to ready the reader for next tag
-                # Without this, the reader may get stuck and not detect new tags
+                uid_bytes = uid
+                uid_str = "".join(map(str, uid))
                 self.rfid.stop_crypto()
 
-        # --- Logic to handle new vs. same tag ---
-
         if uid_str and uid_str != self.last_uid:
-            # A *new* tag has been scanned
             self.last_uid = uid_str
-            print(f"RFID: New tag detected with UID: {uid_str}")
+            print(f"RFID: New tag detected with UID {uid_str}")
+
+            text_payload = self._read_ndef_text(uid_bytes)
+            if text_payload:
+                print(f"RFID: Tag text payload -> \"{text_payload}\"")
+
             return uid_str
-        elif not uid_str:
-            # No tag is present, so reset the last_uid
+
+        if not uid_str:
             if self.last_uid is not None:
                 print("RFID: Tag removed from reader")
             self.last_uid = None
-            return None
-        else:
-            # The *same* tag is still on the reader, do nothing
-            return None
 
-    def _read_text_payload(self, uid):
+        return None
+
+    def _read_ndef_text(self, uid_bytes: Optional[List[int]]) -> Optional[str]:
         """
-        Reads and parses NDEF text payload from RFID tag.
-
-        Args:
-            uid: The UID list of the tag
+        Reads NDEF TLV bytes from the configured block range and attempts
+        to extract the first Well-Known Text record.
         """
-        # Default MIFARE key (factory default)
-        default_key = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        if not self.rfid or not uid_bytes or TAG_NDEF_BLOCK_COUNT <= 0:
+            return None
 
-        raw_data = bytearray()
-        blocks_read = 0
-        auth_failures = 0
+        blocks = list(range(
+            TAG_NDEF_START_BLOCK,
+            TAG_NDEF_START_BLOCK + TAG_NDEF_BLOCK_COUNT
+        ))
 
-        # Read blocks 1-3 from sector 0 (block 0 is manufacturer data, don't read it)
-        # NDEF data often starts at block 1 or block 4
-        error = self.rfid.card_auth(self.rfid.auth_a, 0, default_key, uid)
-        if not error:
-            for block_num in range(1, 4):  # Read blocks 1, 2, 3
-                error, data = self.rfid.read(block_num)
-                if not error and data:
-                    raw_data.extend(data)
-                    blocks_read += 1
-        else:
-            auth_failures += 1
+        raw_bytes = self._read_blocks(uid_bytes, blocks)
+        if not raw_bytes:
+            return None
 
-        # Try to read from sectors 1-15
-        # Each sector has 4 blocks, and the last block is the sector trailer (keys)
-        for sector in range(1, 16):
-            # Calculate the first block of this sector
-            # Sectors 0-31: each has 4 blocks
-            block_addr = sector * 4
+        tlv_idx = 0
+        while tlv_idx < len(raw_bytes):
+            tlv_type = raw_bytes[tlv_idx]
+            tlv_idx += 1
 
-            # Try to authenticate with key A
-            error = self.rfid.card_auth(self.rfid.auth_a, block_addr, default_key, uid)
+            if tlv_type == 0x00:
+                continue  # NULL TLV
+            if tlv_type == 0xFE:
+                break  # Terminator TLV
+            if tlv_idx >= len(raw_bytes):
+                break
 
-            if not error:
-                # Read the first 3 blocks of this sector (skip the trailer block)
-                for block_offset in range(3):
-                    current_block = block_addr + block_offset
-                    error, data = self.rfid.read(current_block)
+            length = raw_bytes[tlv_idx]
+            tlv_idx += 1
+            if length == 0xFF:
+                if tlv_idx + 1 >= len(raw_bytes):
+                    break
+                length = (raw_bytes[tlv_idx] << 8) + raw_bytes[tlv_idx + 1]
+                tlv_idx += 2
 
-                    if not error and data:
-                        raw_data.extend(data)
-                        blocks_read += 1
+            if tlv_type == 0x03:
+                ndef_message = raw_bytes[tlv_idx:tlv_idx + length]
+                return self._parse_text_record(ndef_message)
+
+            tlv_idx += length
+
+        return None
+
+    def _read_blocks(self, uid_bytes: List[int], block_numbers: Iterable[int]) -> Optional[bytes]:
+        """
+        Reads raw 16-byte blocks (skipping sector trailers) and returns
+        their concatenated bytes.
+        """
+        payload = bytearray()
+        key = [int(b) & 0xFF for b in TAG_AUTH_KEY[:6]]
+        last_sector = None
+
+        for block in block_numbers:
+            if (block + 1) % 4 == 0:
+                # Skip sector trailer blocks that contain the keys.
+                continue
+
+            sector = block - (block % 4)
+            if sector != last_sector:
+                error = self.rfid.card_auth(self.rfid.auth_a, sector, key, uid_bytes)
+                if error:
+                    print(f"RFID: Authentication failed for sector starting at block {sector}.")
+                    return None
+                last_sector = sector
+
+            error, data = self.rfid.read(block)
+            if error:
+                print(f"RFID: Error reading block {block}.")
+                return None
+
+            payload.extend(data)
+
+        try:
+            self.rfid.stop_crypto()
+        except Exception:
+            pass
+
+        return bytes(payload)
+
+    def _parse_text_record(self, message: bytes) -> Optional[str]:
+        """
+        Parses the first Well Known 'T' record contained in the NDEF message.
+        """
+        if not message:
+            return None
+
+        try:
+            idx = 0
+            header = message[idx]
+            idx += 1
+
+            sr = (header & 0x10) != 0
+            il = (header & 0x08) != 0
+
+            type_length = message[idx]
+            idx += 1
+
+            if sr:
+                payload_length = message[idx]
+                idx += 1
             else:
-                auth_failures += 1
+                payload_length = int.from_bytes(message[idx:idx + 4], "big")
+                idx += 4
 
-        print(f"RFID: Read {blocks_read} blocks from tag, {auth_failures} authentication failures")
+            if il:
+                id_length = message[idx]
+                idx += 1
+            else:
+                id_length = 0
 
-        # Try to parse NDEF message from the raw data
-        if raw_data:
-            try:
-                # NDEF messages typically start with 0x03 (NDEF Message TLV)
-                # Find the NDEF message in the raw data
-                ndef_start = -1
-                for i in range(len(raw_data) - 1):
-                    if raw_data[i] == 0x03:  # NDEF Message TLV
-                        ndef_start = i
-                        break
+            record_type = message[idx:idx + type_length]
+            idx += type_length
+            idx += id_length
 
-                if ndef_start >= 0:
-                    # The byte after 0x03 is the length
-                    ndef_length = raw_data[ndef_start + 1]
-                    print(f"RFID: Found NDEF TLV at offset {ndef_start}, length: {ndef_length} bytes")
+            payload = message[idx:idx + payload_length]
 
-                    # Extract NDEF message data
-                    ndef_data = raw_data[ndef_start + 2:ndef_start + 2 + ndef_length]
+            if record_type.decode("ascii", errors="ignore") != "T" or not payload:
+                return None
 
-                    # Parse NDEF message
-                    records = list(ndef.message_decoder(bytes(ndef_data)))
-                    print(f"RFID: Decoded {len(records)} NDEF record(s)")
+            status = payload[0]
+            is_utf16 = (status & 0x80) != 0
+            lang_length = status & 0x3F
 
-                    # Extract and print text records
-                    text_found = False
-                    for record in records:
-                        if isinstance(record, ndef.TextRecord):
-                            print(f"RFID: Text payload: {record.text}")
-                            print(f"RFID: Text language: {record.language}")
-                            text_found = True
-                        elif hasattr(record, 'text'):
-                            # Some NDEF implementations might use different record types
-                            print(f"RFID: Text payload: {record.text}")
-                            text_found = True
-                        else:
-                            print(f"RFID: Found non-text record: {type(record).__name__}")
-
-                    if not text_found:
-                        print(f"RFID: No text records found in NDEF message")
-                else:
-                    print("RFID: No NDEF TLV (0x03) marker found in tag data")
-                    # Show first 64 bytes for debugging
-                    preview = ' '.join(f'{b:02X}' for b in raw_data[:64])
-                    print(f"RFID: First 64 bytes: {preview}")
-            except Exception as e:
-                print(f"RFID: Error parsing NDEF data: {e}")
-                import traceback
-                traceback.print_exc()
-        else:
-            print("RFID: No data could be read from tag (all blocks failed)")
+            text_bytes = payload[1 + lang_length:]
+            encoding = "utf-16" if is_utf16 else "utf-8"
+            text = text_bytes.decode(encoding, errors="ignore").strip()
+            return text or None
+        except Exception as exc:
+            print(f"RFID: Failed to parse NDEF text record: {exc}")
+            return None
 
     def cleanup(self):
-        """
-        Cleans up the GPIO and SPI resources.
-        """
         if self.rfid:
             self.rfid.cleanup()
-            print("RFID Reader resources cleaned up.")
+            print("RFID reader resources cleaned up.")

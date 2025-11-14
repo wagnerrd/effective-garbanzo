@@ -43,9 +43,12 @@ if __name__ == "__main__":
             # only return a UID once when a *new* tag is presented.
             uid, text = reader.read_tag()
             
-            if uid:
+            if uid is not None:
                 print(f"Main loop detected new UID: {uid}, text {text}")
-                player.load_playlist(text)
+                if text is None:
+                    print("⚠️  No NDEF text found on tag.")
+                else:
+                    player.load_playlist(text)
             
             # Check if the current song has finished playing.
             # This is necessary for auto-playing the next track.

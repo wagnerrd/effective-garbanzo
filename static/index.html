@@ -241,6 +241,34 @@
             transform: scale(0.95);
         }
 
+        .support-tools {
+            background: #f8f8ff;
+            border: 1px dashed #c7ccff;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .support-tools .btn-small {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .support-status {
+            margin-top: 10px;
+            font-size: 0.85em;
+            color: #555;
+            display: none;
+        }
+
+        .support-status.success {
+            color: #155724;
+        }
+
+        .support-status.error {
+            color: #721c24;
+        }
+
         .upload-area {
             border: 2px dashed #ddd;
             border-radius: 10px;
@@ -354,6 +382,12 @@
                     <input type="text" id="newFolderName" placeholder="New folder name...">
                     <button class="btn-small" onclick="createFolder()">Create</button>
                 </div>
+
+                <div class="support-tools">
+                    <button class="btn-small" onclick="convertUnsupportedFiles()">🆘 Support: Convert Unsupported Audio</button>
+                    <div id="convertStatus" class="support-status"></div>
+                </div>
+
                 <ul class="folder-list" id="folderList">
                     <li class="empty-state">Loading folders...</li>
                 </ul>
@@ -633,6 +667,38 @@
             } catch (error) {
                 console.error('Error deleting folder:', error);
                 alert('Error deleting folder');
+            }
+        }
+
+        async function convertUnsupportedFiles() {
+            const statusDiv = document.getElementById('convertStatus');
+            if (!statusDiv) {
+                return;
+            }
+
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'support-status';
+            statusDiv.textContent = 'Converting unsupported files...';
+
+            try {
+                const response = await fetch('/api/media/convert', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    statusDiv.classList.add('success');
+                    statusDiv.textContent = data.message || 'Conversion complete.';
+                } else {
+                    statusDiv.classList.add('error');
+                    statusDiv.textContent = data.error || 'Conversion failed.';
+                }
+            } catch (error) {
+                console.error('Error converting files:', error);
+                statusDiv.classList.add('error');
+                statusDiv.textContent = 'Unable to start conversion.';
+            } finally {
+                loadFolders();
             }
         }
 

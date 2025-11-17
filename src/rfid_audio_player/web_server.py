@@ -3,6 +3,8 @@ from flask import Flask, jsonify, request, send_from_directory
 import os
 import threading
 import pygame
+import subprocess
+import shutil
 from .config import MEDIA_PATH, SUPPORTED_EXTENSIONS
 
 class WebServer:
@@ -196,6 +198,12 @@ class WebServer:
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/media/convert', methods=['POST'])
+        def convert_media():
+            result = self._convert_unsupported_files()
+            status_code = 200 if result.get('success') else 500
+            return jsonify(result), status_code
+
         # Write text to NFC tag
         @self.app.route('/api/nfc/write', methods=['POST'])
         def write_nfc():
@@ -218,6 +226,92 @@ class WebServer:
                     return jsonify({'error': 'Failed to write to NFC tag. Make sure a tag is present.'}), 500
             except Exception as e:
                 return jsonify({'error': f'Error writing to NFC tag: {str(e)}'}), 500
+
+    def _convert_unsupported_files(self) -> dict:
+        """
+        Scans MEDIA_PATH for files that are not in SUPPORTED_EXTENSIONS.
+        Converts them to high bitrate MP3 files using ffmpeg and stores
+        them in a 'Converted' subfolder next to the source file.
+        """
+        if not os.path.exists(MEDIA_PATH):
+            return {'success': True, 'message': 'Media directory does not exist yet.'}
+
+        ffmpeg_path = shutil.which('ffmpeg')
+        if not ffmpeg_path:
+            return {
+                'success': False,
+                'error': 'ffmpeg executable not found. Install ffmpeg to convert audio files.'
+            }
+
+        converted = []
+        errors = []
+
+        for root, dirs, files in os.walk(MEDIA_PATH):
+            # Skip any existing Converted subdirectories to avoid re-processing
+            dirs[:] = [d for d in dirs if d.lower() != 'converted']
+
+            for filename in files:
+                ext = os.path.splitext(filename)[1].lower()
+                if not ext or ext in SUPPORTED_EXTENSIONS:
+                    continue
+
+                source_path = os.path.join(root, filename)
+                converted_dir = os.path.join(root, 'Converted')
+                os.makedirs(converted_dir, exist_ok=True)
+                target_name = os.path.splitext(filename)[0] + '.mp3'
+                target_path = os.path.join(converted_dir, target_name)
+
+                if os.path.exists(target_path):
+                    converted.append({'source': source_path, 'target': target_path, 'skipped': True})
+                    continue
+
+                cmd = [
+                    ffmpeg_path,
+                    '-y',
+                    '-i', source_path,
+                    '-vn',
+                    '-ar', '44100',
+                    '-ac', '2',
+                    '-b:a', '320k',
+                    target_path
+                ]
+
+                try:
+                    subprocess.run(
+                        cmd,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    converted.append({'source': source_path, 'target': target_path, 'skipped': False})
+                except subprocess.CalledProcessError as exc:
+                    error_msg = exc.stderr.decode('utf-8', errors='ignore') if exc.stderr else str(exc)
+                    errors.append({'file': source_path, 'error': error_msg.strip()})
+
+        if not converted and not errors:
+            return {'success': True, 'message': 'No unsupported files found.'}
+
+        if errors:
+            return {
+                'success': False,
+                'error': 'Some files could not be converted.',
+                'converted_count': len([c for c in converted if not c.get('skipped')]),
+                'skipped_count': len([c for c in converted if c.get('skipped')]),
+                'errors': errors
+            }
+
+        converted_count = len([c for c in converted if not c.get('skipped')])
+        skipped_count = len([c for c in converted if c.get('skipped')])
+        message = f'Converted {converted_count} file(s).'
+        if skipped_count:
+            message += f' Skipped {skipped_count} existing file(s).'
+
+        return {
+            'success': True,
+            'message': message,
+            'converted_count': converted_count,
+            'skipped_count': skipped_count
+        }
 
     def run(self, host='0.0.0.0', port=5000):
         """Run the Flask server in a separate thread."""

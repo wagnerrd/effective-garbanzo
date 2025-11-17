@@ -146,6 +146,18 @@ class WebServer:
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
 
+        @self.app.route('/api/media/folders/<folder_name>/play', methods=['POST'])
+        def play_folder(folder_name):
+            folder_path = os.path.join(MEDIA_PATH, folder_name)
+            if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+                return jsonify({'error': 'Folder not found'}), 404
+
+            success = self.audio_player.load_playlist(folder_name)
+            if not success:
+                return jsonify({'error': 'No playable audio files found in this folder'}), 400
+
+            return jsonify({'success': True, 'message': f'Playing folder {folder_name}'})
+
         # Create a new folder
         @self.app.route('/api/media/folders', methods=['POST'])
         def create_folder():

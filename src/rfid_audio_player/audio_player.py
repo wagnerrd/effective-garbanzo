@@ -26,18 +26,19 @@ class AudioPlayer:
 
     def load_playlist(self, key):
         """
-        Loads a new playlist based on a key
+        Loads a new playlist based on a key.
+        Returns True on success so web requests can report errors.
         """
         existing_folders = os.listdir(MEDIA_PATH)
         if key not in existing_folders:
             print(f"Error: no folder named {key} in media directory.")
-            return
+            return False
 
         folder_path = os.path.join(MEDIA_PATH, key)
 
         if not os.path.isdir(folder_path):
             print(f"Error: Directory not found: {folder_path}")
-            return
+            return False
 
         # Scan the directory for supported audio files and sort them
         self.current_playlist = [
@@ -49,11 +50,12 @@ class AudioPlayer:
 
         if not self.current_playlist:
             print(f"No audio files found in {folder_path}")
-            return
+            return False
         
         print(f"Loaded {len(self.current_playlist)} tracks from '{key}'.")
         self.current_track_index = 0
         self._play_current_track()
+        return True
 
     def _play_current_track(self):
         """Internal helper to load and play the current track."""

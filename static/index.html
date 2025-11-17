@@ -540,6 +540,7 @@
                             <div class="folder-meta">${folder.file_count} files</div>
                         </div>
                         <div>
+                            <button class="btn-small" onclick="playFolder('${folder.name}')">Play Now</button>
                             <button class="btn-small" onclick="openFolder('${folder.name}')">Open</button>
                             <button class="btn-small danger" onclick="deleteFolder('${folder.name}')">Delete</button>
                         </div>
@@ -632,6 +633,23 @@
             } catch (error) {
                 console.error('Error deleting folder:', error);
                 alert('Error deleting folder');
+            }
+        }
+
+        async function playFolder(folderName) {
+            try {
+                const response = await fetch(`/api/media/folders/${folderName}/play`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    updateStatus();
+                } else {
+                    alert(data.error || 'Error starting playback');
+                }
+            } catch (error) {
+                console.error('Error starting playback:', error);
+                alert('Error starting playback');
             }
         }
 

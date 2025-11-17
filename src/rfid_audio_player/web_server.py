@@ -79,11 +79,7 @@ class WebServer:
                 for item in os.listdir(MEDIA_PATH):
                     folder_path = os.path.join(MEDIA_PATH, item)
                     if os.path.isdir(folder_path):
-                        # Count audio files
-                        audio_files = [
-                            f for f in os.listdir(folder_path)
-                            if any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS)
-                        ]
+                        audio_files = self._list_folder_audio_files(folder_path)
                         folders.append({
                             'name': item,
                             'file_count': len(audio_files),
@@ -98,22 +94,25 @@ class WebServer:
                 return jsonify({'error': 'Folder not found'}), 404
 
             files = []
-            for f in os.listdir(folder_path):
-                if any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS):
-                    file_path = os.path.join(folder_path, f)
-                    file_size = os.path.getsize(file_path)
-                    files.append({
-                        'name': f,
-                        'size': file_size,
-                        'size_mb': round(file_size / (1024 * 1024), 2)
-                    })
+            for info in self._list_folder_audio_files(folder_path):
+                files.append({
+                    'name': info['display_name'],
+                    'path': info['relative_path'],
+                    'size': info['size'],
+                    'size_mb': round(info['size'] / (1024 * 1024), 2)
+                })
 
             return jsonify({'files': files})
 
         # Delete a file
-        @self.app.route('/api/media/folders/<folder_name>/files/<filename>', methods=['DELETE'])
+        @self.app.route('/api/media/folders/<folder_name>/files/<path:filename>', methods=['DELETE'])
         def delete_file(folder_name, filename):
             file_path = os.path.join(MEDIA_PATH, folder_name, filename)
+            file_path = os.path.realpath(file_path)
+            folder_path = os.path.realpath(os.path.join(MEDIA_PATH, folder_name))
+            if not file_path.startswith(folder_path):
+                return jsonify({'error': 'Invalid file path'}), 400
+
             if not os.path.exists(file_path):
                 return jsonify({'error': 'File not found'}), 404
 
@@ -312,6 +311,46 @@ class WebServer:
             'converted_count': converted_count,
             'skipped_count': skipped_count
         }
+
+    def _list_folder_audio_files(self, folder_path: str) -> list[dict]:
+        """
+        Returns metadata about supported audio files located in the folder
+        or its nested 'Converted' directory.
+        """
+        files = []
+        search_dirs = [folder_path]
+        converted_dir = os.path.join(folder_path, 'Converted')
+        if os.path.isdir(converted_dir):
+            search_dirs.append(converted_dir)
+
+        for directory in search_dirs:
+            try:
+                entries = os.listdir(directory)
+            except FileNotFoundError:
+                continue
+
+            rel_dir = os.path.relpath(directory, folder_path)
+            rel_dir = '' if rel_dir == '.' else rel_dir
+
+            for entry in entries:
+                if not any(entry.lower().endswith(ext) for ext in SUPPORTED_EXTENSIONS):
+                    continue
+
+                abs_path = os.path.join(directory, entry)
+                if not os.path.isfile(abs_path):
+                    continue
+
+                relative_path = os.path.join(rel_dir, entry) if rel_dir else entry
+                relative_path = relative_path.replace('\\', '/')
+
+                files.append({
+                    'absolute_path': abs_path,
+                    'relative_path': relative_path,
+                    'display_name': relative_path,
+                    'size': os.path.getsize(abs_path),
+                })
+
+        return files
 
     def run(self, host='0.0.0.0', port=5000):
         """Run the Flask server in a separate thread."""

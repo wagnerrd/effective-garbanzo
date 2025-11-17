@@ -384,7 +384,7 @@
                 </div>
 
                 <div class="support-tools">
-                    <button class="btn-small" onclick="convertUnsupportedFiles()">🆘 Support: Convert Unsupported Audio</button>
+                    <button class="btn-small" onclick="convertUnsupportedFiles()">Support: Convert Unsupported Audio</button>
                     <div id="convertStatus" class="support-status"></div>
                 </div>
 
@@ -608,7 +608,7 @@
                             <div class="file-name">🎵 ${file.name}</div>
                             <div class="file-meta">${file.size_mb} MB</div>
                         </div>
-                        <button class="btn-small danger" onclick="deleteFile('${file.name}')">Delete</button>
+                        <button class="btn-small danger" onclick="deleteFile('${file.path.replace(/'/g, "\\'")}')">Delete</button>
                     </li>
                 `).join('');
             } catch (error) {
@@ -751,13 +751,22 @@
             loadFiles(currentFolder);
         }
 
-        async function deleteFile(fileName) {
-            if (!confirm(`Delete "${fileName}"?`)) {
+        async function deleteFile(filePath) {
+            if (!filePath) {
+                return;
+            }
+
+            if (!confirm(`Delete "${filePath}"?`)) {
                 return;
             }
 
             try {
-                const response = await fetch(`/api/media/folders/${currentFolder}/files/${fileName}`, {
+                const encodedPath = filePath
+                    .split('/')
+                    .map(encodeURIComponent)
+                    .join('/');
+
+                const response = await fetch(`/api/media/folders/${currentFolder}/files/${encodedPath}`, {
                     method: 'DELETE'
                 });
 

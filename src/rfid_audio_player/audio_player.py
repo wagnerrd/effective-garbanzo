@@ -40,12 +40,8 @@ class AudioPlayer:
             print(f"Error: Directory not found: {folder_path}")
             return False
 
-        # Scan the directory for supported audio files and sort them
-        self.current_playlist = [
-            os.path.join(folder_path, f)
-            for f in (os.listdir(folder_path))
-            if any(f.endswith(ext) for ext in SUPPORTED_EXTENSIONS)
-        ]
+        # Scan the directory (and nested Converted folder if present) for supported audio files
+        self.current_playlist = self._gather_audio_files(folder_path)
         shuffle(self.current_playlist)
 
         if not self.current_playlist:
@@ -157,3 +153,23 @@ class AudioPlayer:
     def quit(self):
         """Shuts down the mixer."""
         pygame.mixer.quit()
+
+    def _gather_audio_files(self, folder_path: str) -> list[str]:
+        """
+        Returns a list of supported audio file paths from the folder and
+        its nested 'Converted' subfolder (if present).
+        """
+        files = []
+        search_dirs = [folder_path]
+        converted_dir = os.path.join(folder_path, 'Converted')
+        if os.path.isdir(converted_dir):
+            search_dirs.append(converted_dir)
+
+        for directory in search_dirs:
+            try:
+                for entry in os.listdir(directory):
+                    if any(entry.lower().endswith(ext) for ext in SUPPORTED_EXTENSIONS):
+                        files.append(os.path.join(directory, entry))
+            except FileNotFoundError:
+                continue
+        return files

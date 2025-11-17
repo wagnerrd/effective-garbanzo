@@ -10,6 +10,12 @@ PIN_PREV = 26
 # RFID Reset Pin (physical)
 PIN_RFID_RST = 22
 
+# --- LED Settings ---
+# WS2812/NeoPixel diagnostic ring configuration
+LED_PIN = 18            # BCM pin connected to DIN (defaults to GPIO18)
+LED_COUNT = 7           # Number of LEDs on the ring
+LED_BRIGHTNESS = 0.4    # Brightness between 0.0 and 1.0
+
 # --- Audio Player Settings ---
 
 # Path to your media parent directory

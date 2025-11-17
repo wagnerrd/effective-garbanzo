@@ -12,6 +12,7 @@ dependencies = [
     "pygame>=2.6.1",
     "rpi-lgpio>=0.6",
     "spidev",
+    "rpi-ws281x>=5.0.0",
 ]
 
 [build-system]

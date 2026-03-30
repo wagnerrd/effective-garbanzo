@@ -1,6 +1,43 @@
 # main.py
+import socket
+import subprocess
 import time
+from typing import Optional
+
 from src.rfid_audio_player import AudioPlayer, Reader, ButtonControls, WebServer
+
+
+def _get_ip_address() -> Optional[str]:
+    ip_address = None
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip_address = sock.getsockname()[0]
+    except OSError:
+        ip_address = None
+
+    if not ip_address or ip_address.startswith("127."):
+        try:
+            output = subprocess.check_output(["hostname", "-I"], text=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            output = ""
+        candidates = [item for item in output.split() if item and not item.startswith("127.")]
+        if candidates:
+            ip_address = candidates[0]
+
+    return ip_address
+
+
+def _speak_ip_address(player: AudioPlayer) -> None:
+    ip_address = _get_ip_address()
+    if not ip_address:
+        print("Unable to determine IP address.")
+        player.speak_text("I could not determine the IP address.")
+        return
+
+    print(f"IP address detected: {ip_address}")
+    spoken_ip = ip_address.replace(".", " dot ")
+    player.speak_text(f"My IP address is {spoken_ip}.")
 
 if __name__ == "__main__":
     """
@@ -48,7 +85,11 @@ if __name__ == "__main__":
                 if text is None:
                     print("No text found on tag.")
                 else:
-                    player.load_playlist(text)
+                    tag_text = text.strip()
+                    if tag_text.upper() == "IP":
+                        _speak_ip_address(player)
+                    else:
+                        player.load_playlist(tag_text)
             
             # Check if the current song has finished playing.
             # This is necessary for auto-playing the next track.

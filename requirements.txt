@@ -1,4 +1,7 @@
 ndeflib
-pirc522
+pi-rc522==2.3.0
 spidev
 rpi-ws281x>=5.0.0
+pygame
+flask
+RPi.GPIO

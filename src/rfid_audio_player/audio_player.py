@@ -1,7 +1,11 @@
 # audio_player.py
-import pygame
-from random import shuffle
 import os
+import shutil
+import subprocess
+from random import shuffle
+from typing import Optional
+
+import pygame
 from .config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
     DEFAULT_VOLUME
@@ -173,3 +177,34 @@ class AudioPlayer:
             except FileNotFoundError:
                 continue
         return files
+
+    def speak_text(self, text: str) -> bool:
+        """
+        Speak a short message using a system TTS engine (e.g., espeak).
+        """
+        tts_cmd = self._find_tts_command()
+        if not tts_cmd:
+            print("No TTS engine found. Install espeak or espeak-ng to enable speech.")
+            return False
+
+        was_playing = self.playing and not self.paused
+        if was_playing:
+            pygame.mixer.music.pause()
+            self.paused = True
+
+        try:
+            subprocess.run([tts_cmd, text], check=True)
+            return True
+        except subprocess.CalledProcessError as exc:
+            print(f"Error speaking text with {tts_cmd}: {exc}")
+            return False
+        finally:
+            if was_playing:
+                pygame.mixer.music.unpause()
+                self.paused = False
+
+    def _find_tts_command(self) -> Optional[str]:
+        for candidate in ("espeak", "espeak-ng", "spd-say"):
+            if shutil.which(candidate):
+                return candidate
+        return None

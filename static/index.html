@@ -77,6 +77,18 @@
             margin: 20px 0;
         }
 
+        .progress-section {
+            margin: 20px 0 10px;
+        }
+
+        .time-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.85em;
+            color: #666;
+        }
+
         .btn {
             background: #667eea;
             color: white;
@@ -130,6 +142,15 @@
             background: #ddd;
         }
 
+        .progress-slider {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            outline: none;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+
         .volume-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -141,6 +162,18 @@
             box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
         }
 
+        .progress-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
         .volume-slider::-moz-range-thumb {
             width: 24px;
             height: 24px;
@@ -149,6 +182,21 @@
             cursor: pointer;
             border: none;
             box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .progress-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .progress-slider:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .tabs {
@@ -361,6 +409,24 @@
                 <button class="btn" onclick="nextTrack()" id="nextBtn" disabled>⏭️</button>
             </div>
 
+            <div class="progress-section">
+                <input
+                    type="range"
+                    min="0"
+                    max="0"
+                    value="0"
+                    step="0.1"
+                    class="progress-slider"
+                    id="progressSlider"
+                    aria-label="Song progress"
+                    disabled
+                >
+                <div class="time-labels">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalTime">0:00</span>
+                </div>
+            </div>
+
             <div class="volume-control">
                 <div class="volume-label">
                     <span>🔊 Volume</span>
@@ -435,12 +501,15 @@
     <script>
         let currentFolder = null;
         let updateInterval = null;
+        let isSeeking = false;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             updateStatus();
             loadFolders();
             startAutoUpdate();
+
+            const progressSlider = document.getElementById('progressSlider');
 
             // Volume slider
             document.getElementById('volumeSlider').addEventListener('input', (e) => {
@@ -450,6 +519,20 @@
 
             document.getElementById('volumeSlider').addEventListener('change', (e) => {
                 setVolume(e.target.value);
+            });
+
+            progressSlider.addEventListener('pointerdown', () => {
+                isSeeking = true;
+            });
+
+            progressSlider.addEventListener('input', (e) => {
+                isSeeking = true;
+                document.getElementById('currentTime').textContent = formatTime(parseFloat(e.target.value) || 0);
+            });
+
+            progressSlider.addEventListener('change', async (e) => {
+                await seekToPosition(parseFloat(e.target.value) || 0);
+                isSeeking = false;
             });
         });
 
@@ -466,9 +549,11 @@
                 if (data.current_track) {
                     document.getElementById('trackName').textContent = data.current_track;
                     document.getElementById('trackInfo').textContent = `Track ${data.track_index} of ${data.total_tracks}`;
+                    updateProgressUI(data);
                 } else {
                     document.getElementById('trackName').textContent = 'No track loaded';
                     document.getElementById('trackInfo').textContent = 'Scan an RFID tag to start';
+                    resetProgressUI();
                 }
 
                 // Update play/pause button
@@ -494,6 +579,40 @@
             } catch (error) {
                 console.error('Error updating status:', error);
             }
+        }
+
+        function updateProgressUI(data) {
+            const progressSlider = document.getElementById('progressSlider');
+            const duration = Math.max(0, data.duration_seconds || 0);
+            const position = Math.max(0, data.position_seconds || 0);
+            const canSeek = Boolean(data.current_track) && Boolean(data.seek_supported) && duration > 0;
+
+            progressSlider.max = duration;
+            progressSlider.disabled = !canSeek;
+
+            if (!isSeeking) {
+                progressSlider.value = Math.min(position, duration);
+                document.getElementById('currentTime').textContent = formatTime(position);
+            }
+
+            document.getElementById('totalTime').textContent = formatTime(duration);
+        }
+
+        function resetProgressUI() {
+            const progressSlider = document.getElementById('progressSlider');
+            progressSlider.value = 0;
+            progressSlider.max = 0;
+            progressSlider.disabled = true;
+            document.getElementById('currentTime').textContent = '0:00';
+            document.getElementById('totalTime').textContent = '0:00';
+            isSeeking = false;
+        }
+
+        function formatTime(totalSeconds) {
+            const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
+            const minutes = Math.floor(safeSeconds / 60);
+            const seconds = safeSeconds % 60;
+            return `${minutes}:${String(seconds).padStart(2, '0')}`;
         }
 
         async function togglePause() {
@@ -532,6 +651,26 @@
                 });
             } catch (error) {
                 console.error('Error setting volume:', error);
+            }
+        }
+
+        async function seekToPosition(positionSeconds) {
+            try {
+                const response = await fetch('/api/seek', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ position_seconds: positionSeconds })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Unable to seek in this track');
+                }
+
+                updateStatus();
+            } catch (error) {
+                console.error('Error seeking track:', error);
+                alert('Error seeking track');
             }
         }
 

@@ -35,13 +35,19 @@ class WebServer:
                 track_path = self.audio_player.current_playlist[self.audio_player.current_track_index]
                 current_track = os.path.basename(track_path)
 
+            position_seconds = self.audio_player.get_current_position()
+            duration_seconds = self.audio_player.current_track_duration
+
             return jsonify({
                 'playing': self.audio_player.playing,
                 'paused': self.audio_player.paused,
                 'volume': int(pygame.mixer.music.get_volume() * 100),
                 'current_track': current_track,
                 'track_index': self.audio_player.current_track_index + 1 if self.audio_player.current_track_index >= 0 else 0,
-                'total_tracks': len(self.audio_player.current_playlist)
+                'total_tracks': len(self.audio_player.current_playlist),
+                'position_seconds': round(position_seconds, 3),
+                'duration_seconds': round(duration_seconds, 3),
+                'seek_supported': self.audio_player.seek_supported,
             })
 
         # Toggle play/pause
@@ -70,6 +76,29 @@ class WebServer:
             volume = max(0, min(100, volume))  # Clamp between 0-100
             pygame.mixer.music.set_volume(volume / 100.0)
             return jsonify({'success': True, 'volume': volume})
+
+        @self.app.route('/api/seek', methods=['POST'])
+        def seek():
+            data = request.get_json() or {}
+            position_seconds = data.get('position_seconds')
+
+            if position_seconds is None:
+                return jsonify({'error': 'position_seconds is required'}), 400
+
+            try:
+                position_seconds = float(position_seconds)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'position_seconds must be numeric'}), 400
+
+            success, message = self.audio_player.seek_to(position_seconds)
+            if not success:
+                return jsonify({'error': message}), 400
+
+            return jsonify({
+                'success': True,
+                'message': message,
+                'position_seconds': round(self.audio_player.get_current_position(), 3),
+            })
 
         # Get list of media folders
         @self.app.route('/api/media/folders', methods=['GET'])

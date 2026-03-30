@@ -2,10 +2,12 @@
 import os
 import shutil
 import subprocess
+import time
 from random import shuffle
 from typing import Optional
 
 import pygame
+from mutagen import File as MutagenFile
 from .config import (
     MEDIA_PATH, SUPPORTED_EXTENSIONS,
     DEFAULT_VOLUME
@@ -27,6 +29,10 @@ class AudioPlayer:
         self.current_track_index = -1
         self.paused = False
         self.playing = False
+        self.current_track_duration = 0.0
+        self.current_track_position = 0.0
+        self.current_track_started_at: Optional[float] = None
+        self.seek_supported = False
 
     def load_playlist(self, key):
         """
@@ -57,23 +63,38 @@ class AudioPlayer:
         self._play_current_track()
         return True
 
-    def _play_current_track(self):
+    def _play_current_track(self, start_position: float = 0.0) -> bool:
         """Internal helper to load and play the current track."""
         if not self.current_playlist or self.current_track_index == -1:
             print("No playlist loaded.")
-            return
+            return False
 
         track_path = self.current_playlist[self.current_track_index]
         try:
             pygame.mixer.music.load(track_path)
-            pygame.mixer.music.play()
+            self.current_track_duration = self._get_track_duration(track_path)
+            self.seek_supported = self._supports_seeking(track_path)
+            start_position = self._clamp_position(start_position)
+
+            if start_position > 0:
+                pygame.mixer.music.play(start=start_position)
+            else:
+                pygame.mixer.music.play()
+
+            self.current_track_position = start_position
+            self.current_track_started_at = time.monotonic()
             self.playing = True
             self.paused = False
             track_num = self.current_track_index + 1
             total_tracks = len(self.current_playlist)
             print(f"♪ Now Playing [{track_num}/{total_tracks}]: {os.path.basename(track_path)}")
+            return True
+        except NotImplementedError:
+            print(f"❌ Seeking is not supported for {os.path.basename(track_path)}")
+            return False
         except pygame.error as e:
             print(f"❌ Error playing track {track_path}: {e}")
+            return False
 
     def toggle_pause(self):
         """Toggles play/pause state."""
@@ -83,9 +104,12 @@ class AudioPlayer:
 
         if self.paused:
             pygame.mixer.music.unpause()
+            self.current_track_started_at = time.monotonic()
             self.paused = False
             print("▶ Resumed playback.")
         else:
+            self.current_track_position = self.get_current_position()
+            self.current_track_started_at = None
             pygame.mixer.music.pause()
             self.paused = True
             print("⏸ Paused.")
@@ -141,6 +165,8 @@ class AudioPlayer:
 
                 if is_last_track:
                     print("✓ Playlist finished.")
+                    self.current_track_position = self.current_track_duration
+                    self.current_track_started_at = None
                     self.playing = False
                 else:
                     print("Song finished, playing next.")
@@ -153,6 +179,10 @@ class AudioPlayer:
         self.current_track_index = -1
         self.playing = False
         self.paused = False
+        self.current_track_duration = 0.0
+        self.current_track_position = 0.0
+        self.current_track_started_at = None
+        self.seek_supported = False
 
     def quit(self):
         """Shuts down the mixer."""
@@ -189,6 +219,8 @@ class AudioPlayer:
 
         was_playing = self.playing and not self.paused
         if was_playing:
+            self.current_track_position = self.get_current_position()
+            self.current_track_started_at = None
             pygame.mixer.music.pause()
             self.paused = True
 
@@ -201,6 +233,7 @@ class AudioPlayer:
         finally:
             if was_playing:
                 pygame.mixer.music.unpause()
+                self.current_track_started_at = time.monotonic()
                 self.paused = False
 
     def _find_tts_command(self) -> Optional[str]:
@@ -208,3 +241,62 @@ class AudioPlayer:
             if shutil.which(candidate):
                 return candidate
         return None
+
+    def get_current_track_path(self) -> Optional[str]:
+        if not self.current_playlist or self.current_track_index < 0:
+            return None
+        return self.current_playlist[self.current_track_index]
+
+    def get_current_position(self) -> float:
+        if self.current_track_index < 0:
+            return 0.0
+
+        position = self.current_track_position
+        if not self.paused and self.current_track_started_at is not None:
+            position += max(0.0, time.monotonic() - self.current_track_started_at)
+
+        return self._clamp_position(position)
+
+    def seek_to(self, position_seconds: float) -> tuple[bool, str]:
+        track_path = self.get_current_track_path()
+        if not track_path or not self.playing and not self.paused:
+            return False, "No track is currently loaded."
+
+        if not self.seek_supported:
+            return False, "Seeking is not supported for this file format."
+
+        target_position = self._clamp_position(position_seconds)
+        was_paused = self.paused
+
+        if not self._play_current_track(target_position):
+            return False, "Unable to seek within the current track."
+
+        if was_paused:
+            pygame.mixer.music.pause()
+            self.paused = True
+            self.current_track_position = target_position
+            self.current_track_started_at = None
+
+        return True, "Seek successful."
+
+    def _clamp_position(self, position_seconds: float) -> float:
+        if self.current_track_duration > 0:
+            return max(0.0, min(position_seconds, self.current_track_duration))
+        return max(0.0, position_seconds)
+
+    def _supports_seeking(self, track_path: str) -> bool:
+        extension = os.path.splitext(track_path)[1].lower()
+        return extension in {".mp3", ".ogg"}
+
+    def _get_track_duration(self, track_path: str) -> float:
+        try:
+            metadata = MutagenFile(track_path)
+        except Exception as exc:
+            print(f"Unable to read metadata for {track_path}: {exc}")
+            return 0.0
+
+        if metadata is None or not getattr(metadata, "info", None):
+            return 0.0
+
+        length = getattr(metadata.info, "length", 0.0)
+        return max(0.0, float(length))
